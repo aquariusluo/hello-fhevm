@@ -116,7 +116,7 @@ task("task:increment", "Calls the increment() function of FHECounter Contract")
 
     const fheCounterContract = await ethers.getContractAt("FHECounter", FHECounterDeployement.address);
 
-    // Encrypt the value passed as argument
+    // Encrypt the value passed as argument（原始实现）
     const encryptedValue = await fhevm
       .createEncryptedInput(FHECounterDeployement.address, signers[0].address)
       .add32(value)

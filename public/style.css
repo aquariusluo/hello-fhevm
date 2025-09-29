@@ -1,0 +1,73 @@
+* { box-sizing: border-box; }
+:root {
+  --bg: #0b0f1a;
+  --panel: #121826;
+  --panel-border: #1f2430;
+  --muted: #9aa3b0;
+  --text: #e6e9ef;
+  --accent: #6c8cff;
+  --accent-2: #22c55e;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 0; background: radial-gradient(800px 400px at 20% 10%, #0f1324 0%, var(--bg) 60%), radial-gradient(800px 400px at 80% 0%, #0f151f 0%, var(--bg) 60%); color: var(--text); }
+header { padding: 24px; border-bottom: 1px solid var(--panel-border); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+header h1 { margin: 0; font-size: 20px; letter-spacing: 0.2px; }
+header .sub { color: var(--muted); }
+.badge { padding: 6px 10px; border: 1px solid #2a3140; border-radius: 999px; background: linear-gradient(180deg, #131b2a 0%, #101623 100%); color: var(--text); font-size: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
+header .brand { display: flex; align-items: center; gap: 10px; }
+.logo { width: 22px; height: 22px; border-radius: 50%; background: conic-gradient(from 180deg, #6c8cff, #22c55e, #6c8cff); box-shadow: 0 0 0 2px rgba(108,140,255,0.15); }
+main { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.card { background: rgba(18, 24, 38, 0.9); border: 1px solid var(--panel-border); border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.28); backdrop-filter: saturate(140%) blur(6px); margin-bottom: 16px; }
+.card h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: 0.3px; color: #d6d9e0; }
+.card .sub { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+input, select { flex: 1; min-width: 280px; padding: 12px 14px; border-radius: 10px; border: 1px solid #2a3140; background: #0e1421; color: var(--text); transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+input::placeholder, select::placeholder { color: #77819a; }
+input:focus, select:focus { outline: none; border-color: #3a4a6a; box-shadow: 0 0 0 3px rgba(108,140,255,0.15); }
+button { padding: 10px 14px; border-radius: 10px; border: 1px solid #2a3140; background: #1a2132; color: var(--text); cursor: pointer; transition: transform 0.05s ease, background 0.2s ease, box-shadow 0.2s ease; }
+button:hover { background: #202741; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
+button:active { transform: translateY(0); }
+button.primary { background: linear-gradient(180deg, #2a3550 0%, #222b40 100%); border-color: #3a4a6a; }
+button.primary:hover { background: linear-gradient(180deg, #2f3b59 0%, #27334d 100%); }
+pre { background: #0e1421; padding: 12px; border-radius: 10px; border: 1px solid #2a3140; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+footer { padding: 24px; border-top: 1px solid var(--panel-border); color: var(--muted); text-align: center; }
+
+/* Toast */
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #121826; color: var(--text); border: 1px solid #2a3140; border-radius: 12px; padding: 10px 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.3); display: none; max-width: 80%; z-index: 1000; }
+#toast.success { border-color: #285a33; }
+#toast.error { border-color: #6a2a2a; }
+
+/* 微型文字与弱化样式 */
+.small { font-size: 12px; }
+.muted { color: var(--muted); }
+
+/* Deposit 区与 Token Pill */
+.deposit { border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px; margin-top: 8px; }
+.deposit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.deposit-title { font-size: 14px; color: var(--muted); }
+.deposit-amount { font-size: 20px; font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 8px; background: #0f1422; border: 1px solid #2a3140; border-radius: 999px; padding: 6px 10px; }
+.pill-icon { display: inline-flex; align-items: center; gap: 6px; color: #cbd2db; }
+.pill-action { background: transparent; border: 0; color: var(--accent); cursor: pointer; padding: 0; }
+.pill-action:hover { text-decoration: underline; }
+.pill-select { background: transparent; border: 0; color: #cbd2db; font-size: 12px; }
+.pill-select:focus { outline: none; }
+.pill-balance { margin-top: 4px; font-size: 12px; }
+
+/* Range 滑杆与刻度 */
+.range { padding: 8px 0; }
+.range input[type="range"] { width: 100%; appearance: none; height: 6px; border-radius: 999px; background: #1a2336; outline: none; }
+.range input[type="range"]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(108,140,255,0.25); cursor: pointer; }
+.range-marks { display: flex; justify-content: space-between; color: #8a93a3; font-size: 12px; margin-top: 6px; }
+
+/* Steps 组件 */
+.steps { border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px; margin-top: 12px; }
+.steps-title { font-size: 14px; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.steps-items { display: flex; align-items: center; gap: 18px; }
+.step { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #3a4a6a; background: transparent; display: inline-block; }
+.dot.active { border-color: var(--accent); background: rgba(108,140,255,0.18); }
+.dot.done { border-color: #22c55e; background: rgba(34,197,94,0.18); }
+.dot.error { border-color: #ef4444; background: rgba(239,68,68,0.18); }
+.steps-error { margin-top: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid #6a2a2a; color: #f0b4b4; background: rgba(239,68,68,0.08); font-size: 12px; }

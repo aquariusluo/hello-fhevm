@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redact 本地演示</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/light.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div class="logo"></div>
+        <h1>Redact 本地演示</h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="badge">Network: localhost</span>
+        <span class="sub">基于本地 Hardhat 节点的隐私代币交互</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="grid">
+      <section class="card">
+        <h2>账户列表</h2>
+        <p class="sub small">加载本地节点账户并一键填充目标地址。</p>
+        <div class="row">
+          <button id="btn-accounts" class="primary">加载账户</button>
+          <button id="btn-fill-mint-selected">填充铸币为所选账户</button>
+          <button id="btn-fill-transfer-selected">填充转账为所选账户</button>
+          <button id="btn-fill-mint2">一键填充铸币至账户2</button>
+          <button id="btn-fill-transfer2">一键填充转账至账户2</button>
+        </div>
+        <pre id="accounts-output"></pre>
+      </section>
+      <section class="card">
+        <h2>合约地址</h2>
+        <p class="sub small">读取当前部署的 RedactedToken 地址。</p>
+        <button id="btn-address" class="primary">查询 RedactedToken 地址</button>
+        <pre id="address-output"></pre>
+      </section>
+
+      <section class="card">
+        <h2>余额查询与解密</h2>
+        <p class="sub small">选择用于解密的本地账户索引以查看明文余额。</p>
+        <div class="row">
+          <input id="balance-address" placeholder="地址 (留空为默认账户)" />
+          <select id="balance-index-select">
+            <option value="">选择解密账户</option>
+          </select>
+          <button id="btn-balance" class="primary">查询余额</button>
+        </div>
+        <pre id="balance-output"></pre>
+      </section>
+
+      <section class="card mint-card">
+        <h2>铸币 (Deposit / Mint)</h2>
+        <p class="sub small">仅对本地账户铸币，避免加密上下文错误。</p>
+        <div class="seg-toggle">
+          <button class="seg active" id="tab-encrypt">Encrypt</button>
+          <button class="seg" id="tab-decrypt">Decrypt</button>
+        </div>
+        <hr class="seg-divider" />
+        <div class="row">
+          <input id="mint-to" placeholder="接收地址 (如账户2)" />
+          <input id="mint-value" placeholder="数量（可小数，最多 6 位）" />
+          <button id="btn-mint" class="primary">铸币</button>
+        </div>
+        <div class="deposit">
+          <div class="deposit-header">
+            <div>
+              <div class="deposit-title">You Deposit</div>
+              <!-- 隐藏数值展示，仅保留输入框；保留单位节点供逻辑使用 -->
+              <span id="deposit-unit" style="display:none">RT</span>
+              <div class="deposit-edit">
+                <input id="deposit-input" type="number" min="0" step="0.000001" inputmode="decimal" placeholder="直接输入数量（可小数，最多 6 位）" />
+              </div>
+              <div class="pill-balance muted">Balance: <span id="pill-balance">--</span></div>
+            </div>
+            <div class="pill">
+              <span class="pill-icon">Asset</span>
+              <select id="asset-select" class="pill-select">
+                <option value="RT" selected>RT</option>
+                <option value="ETH">ETH</option>
+              </select>
+              <button class="pill-action" id="btn-max">MAX</button>
+            </div>
+          </div>
+          <div class="range">
+            <input type="range" id="mint-range" min="0" max="100" step="1" />
+            <div class="range-marks">
+              <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+            </div>
+          </div>
+        </div>
+        <div class="steps">
+          <div class="steps-title">Encryption steps:</div>
+          <div class="steps-items">
+            <div class="step"><span class="dot" id="step-deploy-dot"></span><span>Deploy</span></div>
+            <div class="step"><span class="dot" id="step-approve-dot"></span><span>Approve</span></div>
+            <div class="step"><span class="dot" id="step-encrypt-dot"></span><span>Encrypt</span></div>
+          </div>
+          <div class="steps-error" id="steps-error" style="display:none"></div>
+        </div>
+        <div class="cta">
+          <button class="cta-primary" id="btn-encrypt-cta">ENCRYPT</button>
+          <div class="cta-caption" id="cta-caption">Encrypt 0 RT into eRT</div>
+        </div>
+        <pre id="mint-output"></pre>
+      </section>
+
+      <section class="card">
+        <h2>私密转账 (Transfer)</h2>
+        <p class="sub small">选择交易账户索引作为发送者，向本地账户转账。</p>
+        <div class="row">
+          <input id="transfer-to" placeholder="接收地址 (如账户2)" />
+          <input id="transfer-value" placeholder="数量（可小数，最多 6 位）" />
+          <button id="btn-transfer" class="primary">转账</button>
+        </div>
+        <pre id="transfer-output"></pre>
+      </section>
+      </div>
+    </main>
+
+    <div id="toast"></div>
+    <footer>
+      <small>本页面仅用于本地演示，调用 Hardhat 任务完成交互。</small>
+    </footer>
+
+    <script>
+      function showToast(msg, type = '') {
+        const el = document.getElementById('toast');
+        if (!el) return;
+        el.textContent = msg;
+        el.className = type ? type : '';
+        el.style.display = 'block';
+        clearTimeout(window.__toastTimer);
+        window.__toastTimer = setTimeout(() => {
+          el.style.display = 'none';
+        }, 2500);
+      }
+
+      async function callApi(path, options = {}) {
+        const res = await fetch(path, options);
+        let data;
+        try {
+          data = await res.json();
+        } catch (e) {
+          const text = await res.text();
+          data = { ok: res.ok, raw: text };
+        }
+        if (typeof data?.ok !== 'undefined') {
+          showToast(data.ok ? '操作成功' : (data.error || '操作失败'), data.ok ? 'success' : 'error');
+        } else {
+          showToast(res.ok ? '操作成功' : '操作失败', res.ok ? 'success' : 'error');
+        }
+        return data;
+      }
+
+      function isValidAddress(addr) {
+        return /^0x[a-fA-F0-9]{40}$/.test(addr || "");
+      }
+      function isLocalAccount(addr) {
+        const acc = window.__accounts || [];
+        return acc.includes(addr);
+      }
+
+      function setSelectedIndexAndAutofill(idx) {
+        const acc = window.__accounts || [];
+        const selected = acc[idx] || '';
+        if (selected) {
+          const addrInput = document.getElementById('balance-address');
+          const mintTo = document.getElementById('mint-to');
+          const transferTo = document.getElementById('transfer-to');
+          if (addrInput) addrInput.value = selected;
+          if (mintTo) mintTo.value = selected;
+          if (transferTo) transferTo.value = selected;
+        }
+      }
+
+      function populateAccountSelect(accounts) {
+        const sel = document.getElementById('balance-index-select');
+        if (!sel) return;
+        sel.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '选择解密账户';
+        sel.appendChild(placeholder);
+        accounts.forEach((a, i) => {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = `账户${i}: ${a}`;
+          sel.appendChild(opt);
+        });
+        if (accounts.length > 0) {
+          sel.value = '0';
+          setSelectedIndexAndAutofill(0);
+        }
+        sel.onchange = () => {
+          const v = sel.value;
+          if (v === '') return;
+          const idx = parseInt(v, 10);
+          if (!Number.isNaN(idx)) setSelectedIndexAndAutofill(idx);
+        };
+      }
+
+      document.getElementById('btn-address').onclick = async () => {
+        const out = document.getElementById('address-output');
+        out.textContent = '查询中...';
+        try {
+          const data = await callApi('/api/address');
+          if (data.ok) {
+            out.textContent = `地址: ${data.address}\n\n输出:\n${data.raw}`;
+          } else {
+            out.textContent = `错误: ${data.error}`;
+          }
+        } catch (e) {
+          out.textContent = '请求失败';
+        }
+      };
+
+      document.getElementById('btn-accounts').onclick = async () => {
+        const out = document.getElementById('accounts-output');
+        out.textContent = '加载中...';
+        try {
+          const data = await callApi('/api/accounts');
+          if (data.ok) {
+            window.__accounts = data.accounts || [];
+            out.textContent = data.accounts.map((a, i) => `账户${i}: ${a}`).join('\n');
+            populateAccountSelect(window.__accounts);
+          } else {
+            out.textContent = `错误: ${data.error}`;
+          }
+        } catch (e) {
+          out.textContent = '请求失败';
+        }
+      };
+
+      document.getElementById('btn-fill-mint-selected').onclick = () => {
+        const acc = window.__accounts || [];
+        const sel = document.getElementById('balance-index-select');
+        let idx = sel && sel.value !== '' ? parseInt(sel.value, 10) : (acc.length >= 2 ? 1 : (acc.length >= 1 ? 0 : null));
+        if (idx !== null && acc[idx]) {
+          document.getElementById('mint-to').value = acc[idx];
+        }
+      };
+
+      document.getElementById('btn-fill-transfer-selected').onclick = () => {
+        const acc = window.__accounts || [];
+        const sel = document.getElementById('balance-index-select');
+        let idx = sel && sel.value !== '' ? parseInt(sel.value, 10) : (acc.length >= 2 ? 1 : (acc.length >= 1 ? 0 : null));
+        if (idx !== null && acc[idx]) {
+          document.getElementById('transfer-to').value = acc[idx];
+        }
+      };
+
+      // 保留账户2一键填充的快捷按钮
+      document.getElementById('btn-fill-mint2').onclick = () => {
+        const acc = window.__accounts || [];
+        if (acc.length >= 2) {
+          document.getElementById('mint-to').value = acc[1];
+        }
+      };
+
+      document.getElementById('btn-fill-transfer2').onclick = () => {
+        const acc = window.__accounts || [];
+        if (acc.length >= 2) {
+          document.getElementById('transfer-to').value = acc[1];
+        }
+      };
+
+      document.getElementById('btn-balance').onclick = async () => {
+        const out = document.getElementById('balance-output');
+        const addr = document.getElementById('balance-address').value.trim();
+        const sel = document.getElementById('balance-index-select');
+        const idxVal = sel ? sel.value : '';
+        const idx = idxVal === '' ? '0' : idxVal;
+        out.textContent = '查询中...';
+        try {
+          const params = new URLSearchParams();
+          if (addr) params.set('address', addr);
+          if (idx) params.set('fromIndex', idx);
+          const q = params.toString() ? `?${params.toString()}` : '';
+          const data = await callApi(`/api/balance${q}`);
+          if (data.ok) {
+            const clearDec = formatDec(toDecimal(data.clear));
+            const enc = data.encrypted || '';
+            const raw = data.raw || '';
+            out.textContent = `余额:${clearDec}\n\n明文余额: ${data.clear}\n加密余额: ${enc}\n\n输出:\n${raw}`;
+          } else {
+            out.textContent = `错误: ${data.error}`;
+          }
+        } catch (e) {
+          out.textContent = '请求失败';
+        }
+      };
+
+      // 页面加载时自动拉取账户并填充下拉
+      (async function autoLoadAccounts() {
+        try {
+          const data = await callApi('/api/accounts');
+          if (data.ok) {
+            window.__accounts = data.accounts || [];
+            const out = document.getElementById('accounts-output');
+            if (out) out.textContent = data.accounts.map((a, i) => `账户${i}: ${a}`).join('\n');
+            populateAccountSelect(window.__accounts);
+            // 加载后尝试驱动 Deploy/Approve 状态
+            updateDeployStatus();
+            updateApproveAndBalance();
+          }
+        } catch (e) {
+          // 忽略自动加载错误，用户可手动点击按钮
+        }
+      })();
+
+      // 本地持久化：按账户索引保存/读取私密余额估值，避免刷新后丢失
+      function getSelectedIndex(){
+        const sel = document.getElementById('balance-index-select');
+        const idxVal = sel ? sel.value : '';
+        return idxVal === '' ? '0' : idxVal;
+      }
+      function storageKeyForEstimate(index){
+        return `__privateBalanceEstimate:${index}`;
+      }
+      function readPrivateEstimate(){
+        try {
+          const idx = getSelectedIndex();
+          const raw = localStorage.getItem(storageKeyForEstimate(idx));
+          if (raw !== null) {
+            const num = parseInt(raw, 10);
+            if (Number.isInteger(num) && num >= 0) {
+              window.__privateBalanceEstimate = num;
+              return;
+            }
+          }
+        } catch(e) { /* 忽略本地存储错误 */ }
+        if (typeof window.__privateBalanceEstimate === 'undefined') {
+          window.__privateBalanceEstimate = 0;
+        }
+      }
+      function writePrivateEstimate(){
+        try {
+          const idx = getSelectedIndex();
+          const num = Number(window.__privateBalanceEstimate || 0);
+          localStorage.setItem(storageKeyForEstimate(idx), String(Math.max(0, Math.floor(num))));
+        } catch(e) { /* 忽略本地存储错误 */ }
+      }
+      // 6 位小数与微单位（10^6）转换工具
+      const DECIMALS = 6;
+      const UNIT_SCALE = 1_000_000;
+      // 使用纯字符串/整数进行小数转换，避免浮点误差
+      function sanitizeDecimalInput(str){
+        let s = String(str || '0').trim();
+        if (!s) return '0';
+        // 只保留数字和一个小数点
+        s = s.replace(/[^\d.]/g, '');
+        const firstDot = s.indexOf('.');
+        if (firstDot !== -1) {
+          s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '');
+        }
+        let [whole, frac = ''] = s.split('.');
+        whole = (whole || '').replace(/^0+(?=\d)/, ''); // 去掉多余前导 0
+        frac = (frac || '').slice(0, DECIMALS); // 最多 6 位小数
+        if (!frac) return whole || '0';
+        return `${whole || '0'}.${frac}`;
+      }
+      function decToMicroInt(str){
+        const s = sanitizeDecimalInput(str);
+        const parts = s.split('.');
+        const whole = parts[0] || '0';
+        const frac = parts[1] || '';
+        const wholeInt = parseInt(whole, 10) || 0;
+        const fracInt = frac ? parseInt(frac.padEnd(DECIMALS, '0'), 10) : 0;
+        return wholeInt * UNIT_SCALE + fracInt;
+      }
+      function microToDecString(micro){
+        let m = Math.floor(Number(micro || 0));
+        if (!Number.isFinite(m) || m <= 0) return '0';
+        const whole = Math.floor(m / UNIT_SCALE);
+        const frac = m % UNIT_SCALE;
+        let fracStr = String(frac).padStart(DECIMALS, '0').replace(/0+$/, '');
+        return fracStr ? `${whole}.${fracStr}` : String(whole);
+      }
+      function toMicro(dec){
+        return decToMicroInt(dec);
+      }
+      function toDecimal(micro){
+        return microToDecString(micro);
+      }
+      function formatDec(dec){
+        // 规范化显示：最多 6 位小数，去除尾随 0
+        const s = sanitizeDecimalInput(dec);
+        if (!s.includes('.')) return s;
+        const [w, f] = s.split('.');
+        const tf = (f || '').replace(/0+$/, '');
+        return tf ? `${w}.${tf}` : w;
+      }
+      // 无余额时禁用 MAX 按钮（Encrypt 参考明文余额，Decrypt 参考私密余额估值）
+      function updateMaxDisabled(){
+        const btnMax = document.getElementById('btn-max');
+        if (!btnMax) return;
+        const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+        const base = isDecrypt
+          ? Number(window.__privateBalanceEstimate || 0)
+          : Number(window.__availableBalance || 0);
+        btnMax.disabled = !(base > 0);
+      }
+      // 分段按钮交互：Encrypt / Decrypt 模式切换
+      (function bindSegTabs(){
+        const btnE = document.getElementById('tab-encrypt');
+        const btnD = document.getElementById('tab-decrypt');
+        const cta = document.getElementById('btn-encrypt-cta');
+        const ctaCaption = document.getElementById('cta-caption');
+        const unitEl = document.getElementById('deposit-unit');
+        const pillBalEl = document.getElementById('pill-balance');
+        if (!btnE || !btnD) return;
+        btnE.onclick = () => {
+          btnE.classList.add('active');
+          btnD.classList.remove('active');
+          if (cta) { cta.disabled = false; cta.textContent = 'ENCRYPT'; }
+          if (ctaCaption) {
+            const amountShown = document.getElementById('deposit-amount')?.textContent || '0';
+            const unit = unitEl?.textContent || 'RT';
+            ctaCaption.textContent = `Encrypt ${amountShown} ${unit} into e${unit}`;
+          }
+          // 切换为加密模式时显示明文余额
+          if (pillBalEl) {
+            const micro = Number(window.__availableBalance || 0);
+            pillBalEl.textContent = formatDec(toDecimal(micro));
+          }
+          // 根据当前余额禁用或启用 MAX
+          updateMaxDisabled();
+          // 切换到 Encrypt 时：将输入与显示重置为 0（整数），并将滑杆置为 0%
+          try {
+            const range = document.getElementById('mint-range');
+            const amountEl = document.getElementById('deposit-amount');
+            const depositInput = document.getElementById('deposit-input');
+            const unit = unitEl?.textContent || 'RT';
+            const zeroVal = 0;
+            if (amountEl) amountEl.textContent = String(zeroVal);
+            if (depositInput) depositInput.value = String(zeroVal);
+            if (ctaCaption) ctaCaption.textContent = `Encrypt ${String(zeroVal)} ${unit} into e${unit}`;
+            if (range) {
+              range.value = '0';
+              range.style.setProperty('--val', `0%`);
+              // 切换模式时视为系统设置，重置 touched
+              try { range.dataset.touched = 'false'; } catch(e) { /* 忽略 */ }
+            }
+          } catch(e) { /* 忽略切换显示错误 */ }
+          // 根据当前滑杆重新同步一次（仅当用户曾操作过滑杆时）
+          const range = document.getElementById('mint-range');
+          if (range && range.dataset && range.dataset.touched === 'true') {
+            range.dispatchEvent(new Event('input'));
+          }
+        };
+        btnD.onclick = () => {
+          btnD.classList.add('active');
+          btnE.classList.remove('active');
+          if (cta) { cta.disabled = false; cta.textContent = 'DECRYPT'; }
+          if (ctaCaption) {
+            const amountShown = document.getElementById('deposit-amount')?.textContent || '0';
+            const unit = unitEl?.textContent || 'RT';
+            ctaCaption.textContent = `Decrypt ${amountShown} e${unit} into ${unit}`;
+          }
+          // 切换为解密模式时显示估算的加密余额（本地估值）
+          if (pillBalEl) {
+            const micro = Number(window.__privateBalanceEstimate || 0);
+            pillBalEl.textContent = formatDec(toDecimal(micro));
+          }
+          // 根据当前余额禁用或启用 MAX
+          updateMaxDisabled();
+          // 切换到 Decrypt 时：将输入与显示重置为 0（整数），并将滑杆置为 0%
+          try {
+            const range = document.getElementById('mint-range');
+            const amountEl = document.getElementById('deposit-amount');
+            const depositInput = document.getElementById('deposit-input');
+            const unit = unitEl?.textContent || 'RT';
+            const zeroVal = 0;
+            if (amountEl) amountEl.textContent = String(zeroVal);
+            if (depositInput) depositInput.value = String(zeroVal);
+            if (ctaCaption) ctaCaption.textContent = `Decrypt ${String(zeroVal)} e${unit} into ${unit}`;
+            if (range) {
+              range.value = '0';
+              range.style.setProperty('--val', `0%`);
+              // 切换模式时视为系统设置，重置 touched
+              try { range.dataset.touched = 'false'; } catch(e) { /* 忽略 */ }
+            }
+          } catch(e) { /* 忽略切换显示错误 */ }
+          // 根据当前滑杆重新同步一次（仅当用户曾操作过滑杆时）
+          const range = document.getElementById('mint-range');
+          if (range && range.dataset && range.dataset.touched === 'true') {
+            range.dispatchEvent(new Event('input'));
+          }
+        };
+      })();
+
+      // 滑杆与 MAX 交互：联动铸币数量与显示
+      (function initDepositUI(){
+        const range = document.getElementById('mint-range');
+        const amountEl = document.getElementById('deposit-amount');
+        const btnMax = document.getElementById('btn-max');
+        const ctaCaption = document.getElementById('cta-caption');
+        const unitEl = document.getElementById('deposit-unit');
+        const depositInput = document.getElementById('deposit-input');
+        // 初始根据余额状态禁用 MAX
+        updateMaxDisabled();
+        function sync(val){
+          const percent = parseFloat(val || '0');
+          const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+          const balanceMicro = isDecrypt
+            ? Number(window.__privateBalanceEstimate || 0)
+            : Number(window.__availableBalance || 0);
+          const amtMicro = balanceMicro > 0 ? Math.floor(balanceMicro * percent / 100) : 0; // 无余额时应为 0
+          const shownDec = toDecimal(amtMicro);
+          if (amountEl) amountEl.textContent = formatDec(shownDec);
+          if (depositInput) depositInput.value = formatDec(shownDec);
+          if (ctaCaption && unitEl) {
+            const unit = unitEl.textContent || 'RT';
+            ctaCaption.textContent = isDecrypt
+              ? `Decrypt ${formatDec(shownDec)} e${unit} into ${unit}`
+              : `Encrypt ${formatDec(shownDec)} ${unit} into e${unit}`;
+          }
+          if (range) {
+            const pct = Math.max(0, Math.min(100, percent));
+            range.style.setProperty('--val', `${pct}%`);
+          }
+        }
+        function setByInput(v){
+          const rawDec = sanitizeDecimalInput(v || '0');
+          const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+          const baseMicro = isDecrypt
+            ? Number(window.__privateBalanceEstimate || 0)
+            : Number(window.__availableBalance || 0);
+          const rawMicro = toMicro(rawDec);
+          const clampedMicro = baseMicro > 0 ? Math.min(rawMicro, baseMicro) : 0;
+          const shownDec = toDecimal(clampedMicro);
+          const percent = baseMicro > 0 ? (clampedMicro / baseMicro * 100) : 0; // 无余额时按0%处理
+          if (range) {
+            range.value = String(Math.max(0, Math.min(100, percent)));
+            // 同步滑杆底色
+            const pct = Math.max(0, Math.min(100, percent));
+            range.style.setProperty('--val', `${pct}%`);
+          }
+          // 直接以输入的数量驱动显示与提交值，避免被滑杆残留百分比影响
+          if (amountEl) amountEl.textContent = formatDec(shownDec);
+          if (ctaCaption && unitEl) {
+            const unit = unitEl.textContent || 'RT';
+            ctaCaption.textContent = isDecrypt
+              ? `Decrypt ${formatDec(shownDec)} e${unit} into ${unit}`
+              : `Encrypt ${formatDec(shownDec)} ${unit} into e${unit}`;
+          }
+        }
+        if (range){
+          range.addEventListener('input', () => {
+            // 标记滑杆已被用户操作，避免后续自动刷新覆盖为 0
+            try { range.dataset.touched = 'true'; } catch(e) { /* 忽略 */ }
+            sync(range.value);
+          });
+        }
+        if (depositInput){
+          depositInput.addEventListener('input', () => {
+            // 标记滑杆/输入框已被用户操作，避免后续自动刷新覆盖为 0
+            try {
+              const range = document.getElementById('mint-range');
+              if (range && range.dataset) range.dataset.touched = 'true';
+            } catch(e) { /* 忽略 */ }
+            setByInput(depositInput.value);
+          });
+          // 失焦时格式化为整数，避免编辑过程中被强制补齐小数位
+          depositInput.addEventListener('blur', () => {
+            const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+            const baseMicro = isDecrypt
+              ? Number(window.__privateBalanceEstimate || 0)
+              : Number(window.__availableBalance || 0);
+            let rawDec = sanitizeDecimalInput(depositInput.value || '0');
+            const rawMicro = toMicro(rawDec);
+            const clampedMicro = baseMicro > 0 ? Math.min(rawMicro, baseMicro) : rawMicro;
+            const shownDec = toDecimal(clampedMicro);
+            depositInput.value = formatDec(shownDec);
+          });
+        }
+        if (btnMax){
+          btnMax.addEventListener('click', () => {
+            const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+            const base = isDecrypt
+              ? Number(window.__privateBalanceEstimate || 0)
+              : Number(window.__availableBalance || 0);
+            const targetPct = base > 0 ? '100' : '0';
+            if (range) range.value = targetPct;
+            sync(targetPct);
+          });
+        }
+        // 初始同步
+        if (range) sync(range.value || '0');
+      })();
+
+      // 部署与批准步骤状态联动，以及余额读取
+      function setDotState(id, state){
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('active','done','error');
+        if (state) el.classList.add(state);
+        // 同步步骤容器类，用于驱动连线动画（灰->绿）
+        const step = el.closest('.step');
+        if (step){
+          step.classList.remove('active','done','error');
+          if (state) step.classList.add(state);
+        }
+      }
+      function setStepsError(msg){
+        const el = document.getElementById('steps-error');
+        if (!el) return;
+        if (msg){ el.style.display='block'; el.textContent = msg; }
+        else { el.style.display='none'; el.textContent = ''; }
+      }
+      async function updateDeployStatus(){
+        try {
+          setDotState('step-deploy-dot','active');
+          const data = await callApi('/api/address');
+          if (data.ok && data.address){
+            setDotState('step-deploy-dot','done');
+            setStepsError('');
+          } else {
+            setDotState('step-deploy-dot','error');
+            setStepsError('未获取到合约地址，Deploy 未完成');
+          }
+        } catch(e){
+          setDotState('step-deploy-dot','error');
+          setStepsError('查询合约地址失败');
+        }
+      }
+      async function updateApproveAndBalance(){
+        try {
+          setDotState('step-approve-dot','active');
+          const addr = document.getElementById('balance-address').value.trim();
+          const sel = document.getElementById('balance-index-select');
+          const idxVal = sel ? sel.value : '';
+          const idx = idxVal === '' ? '0' : idxVal;
+          const params = new URLSearchParams();
+          if (addr) params.set('address', addr);
+          if (idx) params.set('fromIndex', idx);
+          const q = params.toString() ? `?${params.toString()}` : '';
+          const data = await callApi(`/api/balance${q}`);
+          if (data.ok){
+            const bal = Number(data.clear || 0);
+            window.__availableBalance = bal;
+            // 读取本地持久化的加密余额估值
+            readPrivateEstimate();
+            const balEl = document.getElementById('pill-balance');
+            if (balEl) {
+              const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+              const micro = isDecrypt ? Number(window.__privateBalanceEstimate || 0) : bal;
+              balEl.textContent = formatDec(toDecimal(micro));
+            }
+            setDotState('step-approve-dot','done');
+            setStepsError('');
+            // 触发一次滑杆同步以按余额比例显示
+            const range = document.getElementById('mint-range');
+            if (range) {
+              const current = range.value || '0';
+              const unitEl = document.getElementById('deposit-unit');
+              const assetSel = document.getElementById('asset-select');
+              if (unitEl && assetSel) unitEl.textContent = assetSel.value;
+            const amountEl = document.getElementById('deposit-amount');
+            const depositInput = document.getElementById('deposit-input');
+            const percent = parseFloat(current);
+            const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+            const baseMicro = isDecrypt ? Number(window.__privateBalanceEstimate || 0) : bal;
+            const amtMicro = baseMicro > 0 ? Math.floor(baseMicro * percent / 100) : 0;
+            const shownDec = toDecimal(amtMicro);
+              // 仅当用户操作过滑杆/输入框时才同步，避免自动刷新把数值改成 0
+              const touched = !!(range && range.dataset && range.dataset.touched === 'true');
+              // 避免在用户正在编辑时覆盖输入框的数值
+              const isEditing = document.activeElement && document.activeElement.id === 'deposit-input';
+              if (touched) {
+                if (amountEl && !isEditing) amountEl.textContent = formatDec(shownDec);
+                if (depositInput && !isEditing) depositInput.value = formatDec(shownDec);
+              }
+            }
+            // 根据余额状态更新 MAX 按钮可用性
+            updateMaxDisabled();
+          } else {
+            setDotState('step-approve-dot','error');
+            setStepsError(data.error || 'Approve 阶段失败');
+          }
+        } catch(e){
+          setDotState('step-approve-dot','error');
+          setStepsError('读取余额与批准失败');
+        }
+      }
+
+      // 账户选择变化时刷新批准与余额
+      (function bindSelectRefresh(){
+        const sel = document.getElementById('balance-index-select');
+        if (!sel) return;
+        const origOnChange = sel.onchange;
+        sel.onchange = (ev)=>{
+          if (typeof origOnChange === 'function') origOnChange(ev);
+          // 切换账户时读取该账户的本地估值
+          readPrivateEstimate();
+          updateApproveAndBalance();
+          updateMaxDisabled();
+        };
+      })();
+
+      // 资产切换；当前后端仅支持 RT，ETH 作为占位
+      (function bindAssetSelect(){
+        const assetSel = document.getElementById('asset-select');
+        if (!assetSel) return;
+        const unitEl = document.getElementById('deposit-unit');
+        assetSel.addEventListener('change', ()=>{
+          if (unitEl) unitEl.textContent = assetSel.value;
+          // 切换后重新同步余额显示
+          updateApproveAndBalance();
+        });
+      })();
+
+      document.getElementById('btn-mint').onclick = async () => {
+        const out = document.getElementById('mint-output');
+        const to = document.getElementById('mint-to').value.trim();
+        const value = document.getElementById('mint-value').value.trim();
+        const sel = document.getElementById('balance-index-select');
+        const idxVal = sel ? sel.value : '';
+        const fromIndex = idxVal === '' ? '0' : idxVal;
+        out.textContent = '提交中...';
+        try {
+          // 前端校验：地址格式、是否本地账户、数量合法、索引范围
+          if (!isValidAddress(to)) {
+            out.textContent = '错误: 接收地址无效，请填写形如 0x... 的以太坊地址';
+            return;
+          }
+          if (!isLocalAccount(to)) {
+            out.textContent = '错误: 接收地址不在本地账户列表，请先“加载账户”并选择本地账户填充。';
+            return;
+          }
+          const dec = sanitizeDecimalInput(value);
+          const numMicro = toMicro(dec);
+          if (!(numMicro > 0)) {
+            out.textContent = '错误: 数量必须为正数，最多 6 位小数';
+            return;
+          }
+          const acc = window.__accounts || [];
+          const idx = parseInt(fromIndex, 10);
+          if (!Number.isInteger(idx) || idx < 0 || idx >= acc.length) {
+            out.textContent = '错误: 请选择有效的交易账户索引（下拉选择）';
+            return;
+          }
+          const data = await callApi('/api/mint-clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to, value: String(numMicro), fromIndex })
+          });
+          if (data.ok) {
+            out.textContent = `明文铸币成功，tx: ${data.tx}\n\n输出:\n${data.raw}`;
+            // 铸币成功后刷新余额与 MAX 按钮可用状态，确保 Encrypt 模式下可使用新余额
+            try {
+              await updateApproveAndBalance();
+              updateMaxDisabled();
+              // 按需求：铸币成功后将铸币输入框重置为 0，不影响 Encrypt/Decrypt 输入
+              const mintValueEl = document.getElementById('mint-value');
+              if (mintValueEl) mintValueEl.value = '0';
+            } catch (e) { /* 忽略刷新错误，保持原有文案 */ }
+          } else {
+            out.textContent = `错误: ${data.error}`;
+          }
+        } catch (e) {
+          out.textContent = '请求失败';
+        }
+      };
+
+      // 绑定统一 CTA：根据分段调用 Encrypt 或 Decrypt
+      (function bindUnifiedCTA(){
+        const cta = document.getElementById('btn-encrypt-cta');
+        if (!cta) return;
+        cta.onclick = async () => {
+          const out = document.getElementById('mint-output');
+          // Encrypt/Decrypt 使用 “You Deposit” 输入框，不影响铸币输入框
+          const rawInput = document.getElementById('deposit-input')?.value.trim() || '0';
+          const sel = document.getElementById('balance-index-select');
+          const idxVal = sel ? sel.value : '';
+          const fromIndex = idxVal === '' ? '0' : idxVal;
+          const encryptDot = document.getElementById('step-encrypt-dot');
+          const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
+          out.textContent = isDecrypt ? '解密提交中...' : '加密提交中...';
+          if (encryptDot) {
+            encryptDot.classList.remove('done','error');
+            encryptDot.classList.add('active');
+          }
+          try {
+            const dec = sanitizeDecimalInput(rawInput);
+            const numMicro = toMicro(dec);
+            if (!(numMicro > 0)) {
+              out.textContent = isDecrypt ? '错误: 解密数量必须为正数（最多 6 位小数）' : '错误: 加密数量必须为正数（最多 6 位小数）';
+              if (encryptDot) {
+                encryptDot.classList.remove('active');
+                encryptDot.classList.add('error');
+              }
+              return;
+            }
+            const acc = window.__accounts || [];
+            const idx = parseInt(fromIndex, 10);
+            if (!Number.isInteger(idx) || idx < 0 || idx >= acc.length) {
+              out.textContent = '错误: 请选择有效的交易账户索引（下拉选择）';
+              if (encryptDot) {
+                encryptDot.classList.remove('active');
+                encryptDot.classList.add('error');
+              }
+              return;
+            }
+            const endpoint = isDecrypt ? '/api/decrypt' : '/api/encrypt';
+            const data = await callApi(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ value: String(numMicro), fromIndex })
+            });
+            if (data.ok) {
+              out.textContent = (isDecrypt
+                ? `解密成功，tx: ${data.tx}\n\n输出:\n${data.raw}`
+                : `加密成功，tx: ${data.tx}\n\n输出:\n${data.raw}`);
+              if (encryptDot) {
+                encryptDot.classList.remove('active','error');
+                encryptDot.classList.add('done');
+              }
+              // 成功后更新私密余额估值与 UI 显示
+              // 基于微单位更新估值
+              if (Number.isInteger(numMicro) && numMicro > 0) {
+                if (isDecrypt) {
+                  window.__privateBalanceEstimate = Math.max(0, Number(window.__privateBalanceEstimate || 0) - numMicro);
+                } else {
+                  window.__privateBalanceEstimate = Number(window.__privateBalanceEstimate || 0) + numMicro;
+                }
+                // 写入本地持久化，避免刷新后丢失
+                writePrivateEstimate();
+              }
+              // 成功后更新余额与 UI 文案
+              updateApproveAndBalance();
+              updateMaxDisabled();
+              // 保留用户刚执行的数值到 “You Deposit” 输入与显示；不修改铸币输入框，不设置滑杆百分比，并重置 touched
+              try {
+                const depositInput = document.getElementById('deposit-input');
+                const range = document.getElementById('mint-range');
+                const amountEl = document.getElementById('deposit-amount');
+                const unitEl = document.getElementById('deposit-unit');
+                const ctaCaption = document.getElementById('cta-caption');
+                const shownDec = sanitizeDecimalInput(rawInput);
+                if (depositInput) depositInput.value = formatDec(shownDec);
+                if (amountEl) amountEl.textContent = formatDec(shownDec);
+                if (range && range.dataset) {
+                  range.dataset.touched = 'false';
+                }
+                if (ctaCaption && unitEl) {
+                  const unit = unitEl.textContent || 'RT';
+                  const isDecryptNow = document.getElementById('tab-decrypt')?.classList.contains('active');
+                  ctaCaption.textContent = isDecryptNow
+                    ? `Decrypt ${formatDec(shownDec)} e${unit} into ${unit}`
+                    : `Encrypt ${formatDec(shownDec)} ${unit} into e${unit}`;
+                }
+              } catch(e) { /* 忽略显示修正错误 */ }
+              const ctaCaption = document.getElementById('cta-caption');
+              const unitEl = document.getElementById('deposit-unit');
+              const amountShown = document.getElementById('deposit-amount')?.textContent || '0';
+              const unit = unitEl?.textContent || 'RT';
+              if (ctaCaption) {
+                ctaCaption.textContent = isDecrypt
+                  ? `Decrypt ${amountShown} e${unit} into ${unit}`
+                  : `Encrypt ${amountShown} ${unit} into e${unit}`;
+              }
+            } else {
+              out.textContent = `错误: ${data.error}`;
+              if (encryptDot) {
+                encryptDot.classList.remove('active','done');
+                encryptDot.classList.add('error');
+              }
+            }
+          } catch (e) {
+            out.textContent = '请求失败';
+            if (encryptDot) {
+              encryptDot.classList.remove('active','done');
+              encryptDot.classList.add('error');
+            }
+          }
+        };
+      })();
+
+      document.getElementById('btn-transfer').onclick = async () => {
+        const out = document.getElementById('transfer-output');
+        const to = document.getElementById('transfer-to').value.trim();
+        const value = document.getElementById('transfer-value').value.trim();
+        const sel = document.getElementById('balance-index-select');
+        const idxVal = sel ? sel.value : '';
+        const fromIndex = idxVal === '' ? '0' : idxVal;
+        out.textContent = '提交中...';
+        try {
+          const encryptDot = document.getElementById('step-encrypt-dot');
+          if (encryptDot) {
+            encryptDot.classList.remove('done','error');
+            encryptDot.classList.add('active');
+          }
+          // 前端校验：地址格式、是否本地账户、数量合法、索引范围
+          if (!isValidAddress(to)) {
+            out.textContent = '错误: 接收地址无效，请填写形如 0x... 的以太坊地址';
+            return;
+          }
+          if (!isLocalAccount(to)) {
+            out.textContent = '错误: 接收地址不在本地账户列表，可能导致加密校验失败。请先“加载账户”并选择本地账户填充。';
+            return;
+          }
+          const dec = sanitizeDecimalInput(value);
+          const numMicro = toMicro(dec);
+          if (!(numMicro > 0)) {
+            out.textContent = '错误: 数量必须为正数，最多 6 位小数';
+            return;
+          }
+          const acc = window.__accounts || [];
+          const idx = parseInt(fromIndex, 10);
+          if (!Number.isInteger(idx) || idx < 0 || idx >= acc.length) {
+            out.textContent = '错误: 请选择有效的交易账户索引（下拉选择）';
+            return;
+          }
+          const data = await callApi('/api/transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to, value: String(numMicro), fromIndex })
+          });
+            if (data.ok) {
+              const decimalShown = formatDec(toDecimal(String(numMicro)));
+              out.textContent = `提交成功，tx: ${data.tx}\n\n转账金额: ${decimalShown}\n明文金额: ${String(numMicro)}\n输出:\n${data.raw}`;
+              if (encryptDot) {
+                encryptDot.classList.remove('active','error');
+                encryptDot.classList.add('done');
+              }
+              // 估算：当前选择账户的私密余额转出，扣减本地估值
+              const currentIdx = (document.getElementById('balance-index-select')?.value || '0');
+              if (Number.isInteger(numMicro) && numMicro > 0 && String(fromIndex) === String(currentIdx)) {
+                window.__privateBalanceEstimate = Math.max(0, Number(window.__privateBalanceEstimate || 0) - numMicro);
+                // 写入本地持久化
+                writePrivateEstimate();
+                updateApproveAndBalance();
+                updateMaxDisabled();
+              }
+            } else {
+              out.textContent = `错误: ${data.error}`;
+              if (encryptDot) {
+                encryptDot.classList.remove('active','done');
+              encryptDot.classList.add('error');
+            }
+          }
+        } catch (e) {
+          out.textContent = '请求失败';
+          const encryptDot = document.getElementById('step-encrypt-dot');
+          if (encryptDot) {
+            encryptDot.classList.remove('active','done');
+            encryptDot.classList.add('error');
+          }
+        }
+      };
+    </script>
+  </body>
+  </html>
