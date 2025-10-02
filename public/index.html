@@ -22,13 +22,17 @@
           <option value="localhost">Network: Localhost</option>
           <option value="sepolia">Network: Sepolia</option>
         </select>
+        <button id="wallet-toggle-btn" class="wallet-toggle-button" title="Toggle Wallet">
+          👛
+        </button>
         <span class="sub" id="network-desc">Privacy Token Interaction on Local Hardhat Node</span>
       </div>
     </header>
 
-    <main>
+    <main class="main-container">
+      <div class="content-area">
       <div class="grid">
-      <section class="card">
+      <section class="card localhost-only">
         <h2>Account List</h2>
         <p class="sub small">Load local node accounts and fill recipient address with one click.</p>
         <div class="row">
@@ -40,14 +44,14 @@
         </div>
         <pre id="accounts-output"></pre>
       </section>
-      <section class="card">
+      <section class="card localhost-only">
         <h2>Contract Address</h2>
         <p class="sub small">Read the deployed RedactedToken contract address.</p>
         <button id="btn-address" class="primary">Query RedactedToken Address</button>
         <pre id="address-output"></pre>
       </section>
 
-      <section class="card">
+      <section class="card localhost-only">
         <h2>Balance Query & Decrypt</h2>
         <p class="sub small">Select local account index for decryption to view clear balance.</p>
         <div class="row">
@@ -78,7 +82,7 @@
               <div class="deposit-title">You Deposit</div>
               <span id="deposit-unit">ETH</span>
               <div class="deposit-edit">
-                <input id="deposit-input" type="number" min="0" step="0.000000000000000001" inputmode="decimal" placeholder="Enter amount in ETH" />
+                <input id="deposit-input" type="number" min="0" step="0.000000000000000001" inputmode="decimal" placeholder="0" />
               </div>
               <div class="pill-balance muted">Balance: <span id="pill-balance">--</span></div>
             </div>
@@ -113,7 +117,7 @@
         <pre id="mint-output"></pre>
       </section>
 
-      <section class="card">
+      <section class="card localhost-only">
         <h2>Private Transfer</h2>
         <p class="sub small">Transfer encrypted ETH to other accounts privately.</p>
         <div class="row">
@@ -124,7 +128,7 @@
         <pre id="transfer-output"></pre>
       </section>
 
-      <section class="card">
+      <section class="card localhost-only">
         <h2>Withdraw ETH</h2>
         <p class="sub small">Withdraw clear balance back to your wallet as native ETH.</p>
         <div class="row">
@@ -134,7 +138,172 @@
         <pre id="withdraw-output"></pre>
       </section>
       </div>
+      </div>
     </main>
+
+    <!-- Wallet Backdrop -->
+    <div class="wallet-backdrop" id="wallet-backdrop"></div>
+
+    <!-- Loading Modal -->
+    <div class="loading-modal" id="loading-modal">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading balance...</div>
+        <div class="loading-subtext">Please wait while we fetch your data</div>
+      </div>
+    </div>
+
+    <!-- Wallet Panel (Fixed Overlay) -->
+    <aside class="wallet-panel collapsed" id="wallet-panel">
+        <!-- Theme Toggle - Top Left -->
+        <div class="wallet-theme-toggle">
+          <button class="theme-btn light-mode" id="wallet-theme-light">☀️</button>
+          <button class="theme-btn dark-mode active" id="wallet-theme-dark">🌙</button>
+        </div>
+
+        <!-- Wallet Address Card -->
+        <div class="wallet-address-card">
+          <span class="wallet-icon">👛</span>
+          <span class="address-short" id="wallet-address-display">0x4D47...41fa1</span>
+          <button class="copy-btn" id="copy-address" title="Copy address">📋</button>
+          <button class="close-btn" title="Close">✕</button>
+        </div>
+
+        <!-- Balance Display -->
+        <div class="wallet-balance">
+          <div class="balance-amount" id="wallet-total-balance">
+            <span class="balance-loading">Loading...</span>
+          </div>
+        </div>
+
+        <!-- Network Selector -->
+        <div class="wallet-network-selector">
+          <div class="network-icon">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23627EEA' d='M12 0L5 12.5l7 4 7-4L12 0z'/%3E%3Cpath fill='%238A9FFF' d='M5 12.5L12 24l7-11.5-7 4-7-4z'/%3E%3C/svg%3E" alt="ETH" style="width: 20px; height: 20px;" />
+          </div>
+          <span class="network-name">Ethereum</span>
+          <span class="dropdown-arrow">▼</span>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="wallet-actions">
+          <button class="wallet-action-btn send-btn">
+            <span class="action-icon">↗</span> SEND
+          </button>
+          <button class="wallet-action-btn receive-btn">
+            <span class="action-icon">↙</span> RECEIVE
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="wallet-tabs">
+          <button class="wallet-tab active" id="tab-tokens">Tokens</button>
+          <button class="wallet-tab" id="tab-history">History</button>
+        </div>
+
+        <!-- Balance Legend -->
+        <div class="balance-legend">
+          <span class="legend-label">Balance Legend:</span>
+          <span class="legend-item">
+            <span class="legend-dot public"></span> Public
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot claimable"></span> Claimable
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot confidential"></span> Confidential
+          </span>
+        </div>
+
+        <!-- Tokens List -->
+        <div class="tokens-list" id="tokens-list">
+          <!-- ETH Token -->
+          <div class="token-row">
+            <div class="token-info">
+              <div class="token-icon eth-icon">Ξ</div>
+              <div class="token-details">
+                <div class="token-name">ETH / WETH</div>
+                <div class="token-privacy">
+                  <span class="privacy-icon">👁</span>
+                  <span class="privacy-percent" id="eth-privacy-percent">0%</span>
+                </div>
+              </div>
+            </div>
+            <div class="token-balance">
+              <div class="balance-value" id="eth-balance">
+                <span class="balance-loading-small">--</span>
+              </div>
+              <div class="balance-confidential">
+                <span id="eth-confidential-percent">0%</span>
+                <span class="no-view-icon">🚫</span>
+              </div>
+            </div>
+            <div class="token-progress">
+              <div class="progress-bar">
+                <div class="progress-segment public" id="eth-public-bar" style="width: 0%"></div>
+                <div class="progress-segment claimable" id="eth-claimable-bar" style="width: 0%"></div>
+                <div class="progress-segment confidential" id="eth-confidential-bar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- USDC Token (placeholder) -->
+          <div class="token-row">
+            <div class="token-info">
+              <div class="token-icon usdc-icon">$</div>
+              <div class="token-details">
+                <div class="token-name">USDC</div>
+                <div class="token-privacy">
+                  <span class="privacy-icon">👁</span>
+                  <span class="privacy-percent">0%</span>
+                </div>
+              </div>
+            </div>
+            <div class="token-balance">
+              <div class="balance-value">0</div>
+              <div class="balance-confidential">
+                <span>0%</span>
+                <span class="no-view-icon">🚫</span>
+              </div>
+            </div>
+            <div class="token-progress">
+              <div class="progress-bar">
+                <div class="progress-segment public" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- EURC Token (placeholder) -->
+          <div class="token-row">
+            <div class="token-info">
+              <div class="token-icon eurc-icon">€</div>
+              <div class="token-details">
+                <div class="token-name">EURC</div>
+                <div class="token-privacy">
+                  <span class="privacy-icon">👁</span>
+                  <span class="privacy-percent">0%</span>
+                </div>
+              </div>
+            </div>
+            <div class="token-balance">
+              <div class="balance-value">0</div>
+              <div class="balance-confidential">
+                <span>0%</span>
+                <span class="no-view-icon">🚫</span>
+              </div>
+            </div>
+            <div class="token-progress">
+              <div class="progress-bar">
+                <div class="progress-segment public" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="history-list" id="history-list" style="display: none;">
+          <div class="history-empty">No transaction history</div>
+        </div>
+      </aside>
 
     <div id="toast"></div>
     <footer>
@@ -145,9 +314,18 @@
       // Network Management
       let currentNetwork = localStorage.getItem('network') || 'localhost';
 
+      // Force localhost for initial development
+      if (currentNetwork !== 'localhost' && currentNetwork !== 'sepolia') {
+        currentNetwork = 'localhost';
+        localStorage.setItem('network', 'localhost');
+      }
+
       (function initNetwork() {
         const networkSelect = document.getElementById('network-select');
         const networkDesc = document.getElementById('network-desc');
+
+        // Set initial data-network attribute
+        document.body.setAttribute('data-network', currentNetwork);
 
         if (networkSelect) {
           networkSelect.value = currentNetwork;
@@ -156,6 +334,8 @@
           networkSelect.addEventListener('change', () => {
             currentNetwork = networkSelect.value;
             localStorage.setItem('network', currentNetwork);
+            // Update data-network attribute for CSS targeting
+            document.body.setAttribute('data-network', currentNetwork);
             updateNetworkDescription();
             showToast(`Switched to ${currentNetwork === 'localhost' ? 'Localhost' : 'Sepolia Testnet'}`, 'success');
             // Reload accounts and contract info for new network
@@ -253,12 +433,30 @@
       })();
 
       // Auto-refresh balance on page load
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          loadAccountsForNetwork();
-          updateDeployStatus();
-          updateApproveAndBalance();
-        }, 1000);
+      window.addEventListener('load', async () => {
+        // Show loading modal on page load
+        showLoadingModal('Initializing...', 'Loading application and connecting to network');
+
+        try {
+          // Load all data including balance - keep modal open until everything is ready
+          await Promise.all([
+            loadAccountsForNetwork(),
+            updateDeployStatus(),
+            updateApproveAndBalance()
+          ]);
+
+          // Hide loading modal only after all data including balance is loaded
+          hideLoadingModal();
+
+          // Don't auto-open wallet - let user open it manually when needed
+        } catch (e) {
+          console.log('Initial load failed:', e);
+          // Hide loading modal even on error
+          hideLoadingModal();
+
+          // Show user-friendly error message
+          showToast('Failed to load data. Please refresh the page.', 'error');
+        }
       });
 
       // Update last refresh timestamp
@@ -295,6 +493,25 @@
         }, 2500);
       }
 
+      // Loading Modal Functions
+      function showLoadingModal(text = 'Loading balance...', subtext = 'Please wait while we fetch your data') {
+        const modal = document.getElementById('loading-modal');
+        if (modal) {
+          const textEl = modal.querySelector('.loading-text');
+          const subtextEl = modal.querySelector('.loading-subtext');
+          if (textEl) textEl.textContent = text;
+          if (subtextEl) subtextEl.textContent = subtext;
+          modal.classList.add('active');
+        }
+      }
+
+      function hideLoadingModal() {
+        const modal = document.getElementById('loading-modal');
+        if (modal) {
+          modal.classList.remove('active');
+        }
+      }
+
       async function callApi(path, options = {}) {
         // Add network parameter to URL
         const separator = path.includes('?') ? '&' : '?';
@@ -309,10 +526,13 @@
           const text = await res.text();
           data = { ok: res.ok, raw: text };
         }
+        // Show toast only for errors
         if (typeof data?.ok !== 'undefined') {
-          showToast(data.ok ? 'Operation succeeded' : (data.error || 'Operation failed'), data.ok ? 'success' : 'error');
-        } else {
-          showToast(res.ok ? 'Operation succeeded' : 'Operation failed', res.ok ? 'success' : 'error');
+          if (!data.ok) {
+            showToast(data.error || 'Operation failed', 'error');
+          }
+        } else if (!res.ok) {
+          showToast('Operation failed', 'error');
         }
         return data;
       }
@@ -439,7 +659,11 @@
         const sel = document.getElementById('balance-index-select');
         const idxVal = sel ? sel.value : '';
         const idx = idxVal === '' ? '0' : idxVal;
+
+        // Show loading modal
+        showLoadingModal('Loading balance...', 'Please wait while we fetch your data');
         out.textContent = 'Querying...';
+
         try {
           const params = new URLSearchParams();
           if (addr) params.set('address', addr);
@@ -457,6 +681,8 @@
           }
         } catch (e) {
           out.textContent = 'Request failed';
+        } finally {
+          hideLoadingModal();
         }
       };
 
@@ -471,21 +697,241 @@
         }
       };
 
-      // Auto load accounts on page load
-      (async function autoLoadAccounts() {
-        try {
-          const data = await callApi('/api/accounts');
-          if (data.ok) {
-            window.__accounts = data.accounts || [];
-            const out = document.getElementById('accounts-output');
-            if (out) out.textContent = data.accounts.map((a, i) => `Account ${i}: ${a}`).join('\n');
-            populateAccountSelect(window.__accounts);
-            // Try to update Deploy/Approve status
-            updateDeployStatus();
-            updateApproveAndBalance();
+      // Wallet Panel Interactions
+      (function initWalletPanel() {
+        const walletPanel = document.getElementById('wallet-panel');
+        const walletToggleBtn = document.getElementById('wallet-toggle-btn');
+        const walletBackdrop = document.getElementById('wallet-backdrop');
+        const closeBtn = document.querySelector('.close-btn');
+
+        // Toggle wallet panel
+        function toggleWallet() {
+          if (walletPanel) {
+            const isCollapsed = walletPanel.classList.contains('collapsed');
+            if (isCollapsed) {
+              walletPanel.classList.remove('collapsed');
+              if (walletToggleBtn) {
+                walletToggleBtn.classList.add('active');
+              }
+              if (walletBackdrop) {
+                walletBackdrop.classList.add('active');
+              }
+              // Save state
+              localStorage.setItem('walletPanelOpen', 'true');
+
+              // Auto-fetch balance when wallet opens
+              autoFetchWalletBalance();
+            } else {
+              walletPanel.classList.add('collapsed');
+              if (walletToggleBtn) {
+                walletToggleBtn.classList.remove('active');
+              }
+              if (walletBackdrop) {
+                walletBackdrop.classList.remove('active');
+              }
+              // Save state
+              localStorage.setItem('walletPanelOpen', 'false');
+            }
           }
-        } catch (e) {
-          // Ignore auto-load errors, user can click button manually
+        }
+
+        // Auto-fetch balance when wallet opens
+        async function autoFetchWalletBalance() {
+          try {
+            // Check if we have cached balance data
+            const cachedWallet = window.__walletBalance;
+            const cachedClear = window.__availableBalance;
+            const cachedEncrypted = window.__privateBalanceEstimate;
+
+            // If we have cached data, show it immediately
+            if (cachedWallet || cachedClear || cachedEncrypted) {
+              updateWalletPanel(
+                cachedWallet || '0',
+                cachedClear || '0',
+                cachedEncrypted || '0'
+              );
+            } else {
+              // No cached data, show loading modal
+              showLoadingModal('Loading wallet balance...', 'Fetching your token balances');
+            }
+
+            // Then fetch fresh data in the background
+            // Trigger a balance update if we have accounts loaded
+            if (window.__accounts && window.__accounts.length > 0) {
+              // Call the existing balance update function
+              if (typeof updateApproveAndBalance === 'function') {
+                await updateApproveAndBalance();
+              }
+            } else {
+              // Try to load accounts first
+              const data = await callApi('/api/accounts');
+              if (data.ok && data.accounts) {
+                window.__accounts = data.accounts || [];
+                window.__accountsList = data.accounts || [];
+                populateAccountSelect(window.__accounts);
+
+                // Now fetch balance
+                if (typeof updateApproveAndBalance === 'function') {
+                  await updateApproveAndBalance();
+                }
+              }
+            }
+          } catch (e) {
+            console.log('Auto-fetch balance failed:', e);
+            // Show a friendly message if balance fetch fails
+            const totalBalEl = document.getElementById('wallet-total-balance');
+            if (totalBalEl && totalBalEl.textContent.includes('Loading')) {
+              totalBalEl.innerHTML = '<span style="font-size: 18px; color: var(--text-muted);">Unable to load balance</span>';
+            }
+          } finally {
+            // Always hide loading modal when done
+            hideLoadingModal();
+          }
+        }
+
+        // Wallet toggle button click
+        if (walletToggleBtn) {
+          walletToggleBtn.addEventListener('click', toggleWallet);
+        }
+
+        // Close button click
+        if (closeBtn) {
+          closeBtn.addEventListener('click', toggleWallet);
+        }
+
+        // Backdrop click to close
+        if (walletBackdrop) {
+          walletBackdrop.addEventListener('click', toggleWallet);
+        }
+
+        // Restore wallet state from localStorage
+        const savedState = localStorage.getItem('walletPanelOpen');
+        if (savedState === 'true' && walletPanel) {
+          walletPanel.classList.remove('collapsed');
+          if (walletToggleBtn) {
+            walletToggleBtn.classList.add('active');
+          }
+          if (walletBackdrop) {
+            walletBackdrop.classList.add('active');
+          }
+          // Auto-fetch balance on page load if wallet is open
+          setTimeout(() => {
+            autoFetchWalletBalance();
+          }, 500);
+        }
+
+        // Wallet theme toggle
+        const lightBtn = document.getElementById('wallet-theme-light');
+        const darkBtn = document.getElementById('wallet-theme-dark');
+
+        if (lightBtn && darkBtn) {
+          // Sync with main theme
+          const currentTheme = document.documentElement.getAttribute('data-theme');
+          if (currentTheme === 'dark') {
+            darkBtn.classList.add('active');
+            lightBtn.classList.remove('active');
+          } else {
+            lightBtn.classList.add('active');
+            darkBtn.classList.remove('active');
+          }
+
+          lightBtn.addEventListener('click', () => {
+            document.documentElement.setAttribute('data-theme', 'light');
+            localStorage.setItem('theme', 'light');
+            lightBtn.classList.add('active');
+            darkBtn.classList.remove('active');
+            updateThemeIcon('light');
+          });
+
+          darkBtn.addEventListener('click', () => {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+            darkBtn.classList.add('active');
+            lightBtn.classList.remove('active');
+            updateThemeIcon('dark');
+          });
+        }
+
+        function updateThemeIcon(theme) {
+          const icon = document.querySelector('.theme-icon');
+          if (icon) {
+            icon.textContent = theme === 'dark' ? '🌙' : '☀️';
+          }
+        }
+
+        // Tab switching
+        const tabTokens = document.getElementById('tab-tokens');
+        const tabHistory = document.getElementById('tab-history');
+        const tokensList = document.getElementById('tokens-list');
+        const historyList = document.getElementById('history-list');
+
+        if (tabTokens && tabHistory && tokensList && historyList) {
+          tabTokens.addEventListener('click', () => {
+            tabTokens.classList.add('active');
+            tabHistory.classList.remove('active');
+            tokensList.style.display = 'flex';
+            historyList.style.display = 'none';
+          });
+
+          tabHistory.addEventListener('click', () => {
+            tabHistory.classList.add('active');
+            tabTokens.classList.remove('active');
+            historyList.style.display = 'flex';
+            tokensList.style.display = 'none';
+          });
+        }
+
+        // Copy address functionality
+        const copyBtn = document.getElementById('copy-address');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', () => {
+            const addrDisplay = document.getElementById('wallet-address-display');
+            const fullAddr = addrDisplay?.dataset?.fullAddress || addrDisplay?.textContent;
+            if (fullAddr) {
+              navigator.clipboard.writeText(fullAddr).then(() => {
+                showToast('Address copied to clipboard', 'success');
+              }).catch(() => {
+                showToast('Failed to copy address', 'error');
+              });
+            }
+          });
+        }
+
+        // Send/Receive button actions
+        const sendBtn = document.querySelector('.send-btn');
+        const receiveBtn = document.querySelector('.receive-btn');
+
+        if (sendBtn) {
+          sendBtn.addEventListener('click', () => {
+            // Scroll to transfer section by finding the h2 element with "Private Transfer" text
+            const headers = document.querySelectorAll('h2');
+            let transferSection = null;
+            headers.forEach(h => {
+              if (h.textContent.includes('Private Transfer')) {
+                transferSection = h.parentElement;
+              }
+            });
+            if (transferSection) {
+              transferSection.scrollIntoView({ behavior: 'smooth' });
+            } else {
+              // Fallback: just show a message
+              showToast('Use the Private Transfer section to send tokens', 'success');
+            }
+          });
+        }
+
+        if (receiveBtn) {
+          receiveBtn.addEventListener('click', () => {
+            const addrDisplay = document.getElementById('wallet-address-display');
+            const fullAddr = addrDisplay?.dataset?.fullAddress || addrDisplay?.textContent;
+            if (fullAddr) {
+              navigator.clipboard.writeText(fullAddr).then(() => {
+                showToast('Your address copied! Share it to receive tokens', 'success');
+              }).catch(() => {
+                showToast('Failed to copy address', 'error');
+              });
+            }
+          });
         }
       })();
 
@@ -705,22 +1151,22 @@
             ? BigInt(window.__privateBalanceEstimate || '0')
             : BigInt(window.__walletBalance || '0');
           const rawMicro = BigInt(toWei(rawDec));
-          const clampedMicro = baseMicro > 0n ? (rawMicro < baseMicro ? rawMicro : baseMicro) : 0n;
+          const clampedMicro = baseMicro > 0n ? (rawMicro < baseMicro ? rawMicro : baseMicro) : rawMicro;
           const shownDec = toDecimal(clampedMicro);
-          const percent = baseMicro > 0n ? Number(clampedMicro * 10000n / baseMicro) / 100 : 0; // 无余额时按0%处理
+          const percent = baseMicro > 0n ? Number(clampedMicro * 10000n / baseMicro) / 100 : 0;
           if (range) {
             range.value = String(Math.max(0, Math.min(100, percent)));
             // 同步滑杆底色
             const pct = Math.max(0, Math.min(100, percent));
             range.style.setProperty('--val', `${pct}%`);
           }
-          // 直接以输入的数量驱动显示与提交值，避免被滑杆残留百分比影响
-          if (amountEl) amountEl.textContent = formatDec(shownDec);
+          // Keep the user's input value exactly as typed (don't overwrite with calculated value)
+          if (amountEl) amountEl.textContent = formatDec(rawDec);
           if (ctaCaption && unitEl) {
             const unit = unitEl.textContent || 'RT';
             ctaCaption.textContent = isDecrypt
-              ? `Withdraw ${formatDec(shownDec)} e${unit} as ${unit}`
-              : `Encrypt ${formatDec(shownDec)} ${unit} into e${unit}`;
+              ? `Withdraw ${formatDec(rawDec)} e${unit} as ${unit}`
+              : `Encrypt ${formatDec(rawDec)} ${unit} into e${unit}`;
           }
         }
         if (range){
@@ -739,18 +1185,7 @@
             } catch(e) { /* 忽略 */ }
             setByInput(depositInput.value);
           });
-          // 失焦时格式化为整数，避免编辑过程中被强制补齐小数位
-          depositInput.addEventListener('blur', () => {
-            const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
-            const baseMicro = isDecrypt
-              ? BigInt(window.__privateBalanceEstimate || '0')
-              : BigInt(window.__walletBalance || '0');
-            let rawDec = sanitizeDecimalInput(depositInput.value || '0');
-            const rawMicro = BigInt(toWei(rawDec));
-            const clampedMicro = baseMicro > 0n ? (rawMicro < baseMicro ? rawMicro : baseMicro) : rawMicro;
-            const shownDec = toDecimal(clampedMicro);
-            depositInput.value = formatDec(shownDec);
-          });
+          // Remove blur event handler - keep user's exact input value
         }
         if (btnMax){
           btnMax.addEventListener('click', () => {
@@ -834,33 +1269,19 @@
             }
             setDotState('step-approve-dot','done');
             setStepsError('');
-            // Trigger slider sync to display based on balance ratio
+            // Update slider display based on balance - but don't overwrite user input
             const range = document.getElementById('mint-range');
             if (range) {
-              const current = range.value || '0';
               const unitEl = document.getElementById('deposit-unit');
               const assetSel = document.getElementById('asset-select');
               if (unitEl && assetSel) unitEl.textContent = assetSel.value;
-            const amountEl = document.getElementById('deposit-amount');
-            const depositInput = document.getElementById('deposit-input');
-            const percent = parseFloat(current);
-            const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
-            const baseMicro = isDecrypt ? BigInt(window.__privateBalanceEstimate || '0') : BigInt(walletBal);
-            const amtMicro = baseMicro > 0n ? (baseMicro * BigInt(Math.floor(percent * 100)) / 10000n) : 0n;
-            const shownDec = toDecimal(amtMicro);
-              // 仅当用户操作过滑杆/输入框时才同步，避免自动刷新把数值改成 0
-              const touched = !!(range && range.dataset && range.dataset.touched === 'true');
-              // 避免在用户正在编辑时覆盖输入框的数值
-              const isEditing = document.activeElement && document.activeElement.id === 'deposit-input';
-              if (touched) {
-                if (amountEl && !isEditing) amountEl.textContent = formatDec(shownDec);
-                if (depositInput && !isEditing) depositInput.value = formatDec(shownDec);
-              }
             }
             // 根据余额状态更新 MAX 按钮可用性
             updateMaxDisabled();
             // Update last refresh timestamp
             updateLastRefreshTime();
+            // Update wallet panel display
+            updateWalletPanel(walletBal, clearBal, decryptedBal);
           } else {
             setDotState('step-approve-dot','error');
             setStepsError(data.error || 'Approve stage failed');
@@ -868,6 +1289,89 @@
         } catch(e){
           setDotState('step-approve-dot','error');
           setStepsError('Failed to read balance and approve');
+        }
+      }
+
+      // Update wallet panel with balance data
+      function updateWalletPanel(walletBal, clearBal, encryptedBal) {
+        try {
+          // Convert BigInt strings to numbers for calculations
+          const wallet = BigInt(walletBal || '0');
+          const clear = BigInt(clearBal || '0');
+          const encrypted = BigInt(encryptedBal || '0');
+
+          // Total balance = wallet (public) + clear (claimable) + encrypted (confidential)
+          const total = wallet + clear + encrypted;
+
+          // Update total balance display
+          const totalBalEl = document.getElementById('wallet-total-balance');
+          if (totalBalEl) {
+            const balanceText = `${formatDec(toDecimal(total))} ETH`;
+            // Remove loading state and show balance
+            totalBalEl.innerHTML = balanceText;
+            totalBalEl.classList.add('loaded');
+          }
+
+          // Update ETH balance
+          const ethBalEl = document.getElementById('eth-balance');
+          if (ethBalEl) {
+            const balanceText = formatDec(toDecimal(total));
+            ethBalEl.innerHTML = balanceText;
+          }
+
+          // Calculate percentages for progress bars
+          const totalNum = Number(total);
+          let publicPercent = 0;
+          let claimablePercent = 0;
+          let confidentialPercent = 0;
+
+          if (totalNum > 0) {
+            publicPercent = (Number(wallet) / totalNum) * 100;
+            claimablePercent = (Number(clear) / totalNum) * 100;
+            confidentialPercent = (Number(encrypted) / totalNum) * 100;
+          }
+
+          // Update progress bars
+          const publicBar = document.getElementById('eth-public-bar');
+          const claimableBar = document.getElementById('eth-claimable-bar');
+          const confidentialBar = document.getElementById('eth-confidential-bar');
+
+          if (publicBar) publicBar.style.width = `${publicPercent}%`;
+          if (claimableBar) claimableBar.style.width = `${claimablePercent}%`;
+          if (confidentialBar) confidentialBar.style.width = `${confidentialPercent}%`;
+
+          // Update privacy percentage (public visibility)
+          const privacyPercentEl = document.getElementById('eth-privacy-percent');
+          if (privacyPercentEl) {
+            privacyPercentEl.textContent = `${publicPercent.toFixed(2)}%`;
+          }
+
+          // Update confidential percentage (hidden amount)
+          const confidentialPercentEl = document.getElementById('eth-confidential-percent');
+          if (confidentialPercentEl) {
+            confidentialPercentEl.textContent = `${confidentialPercent.toFixed(2)}%`;
+          }
+
+          // Update wallet address display
+          const accounts = window.__accountsList || [];
+          const sel = document.getElementById('balance-index-select');
+          const idx = sel ? parseInt(sel.value || '0') : 0;
+          if (accounts[idx]) {
+            const addr = accounts[idx];
+            const shortAddr = `${addr.slice(0, 6)}...${addr.slice(-6)}`;
+            const addrDisplay = document.getElementById('wallet-address-display');
+            if (addrDisplay) {
+              addrDisplay.textContent = shortAddr;
+              addrDisplay.dataset.fullAddress = addr;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to update wallet panel:', e);
+          // Show error state
+          const totalBalEl = document.getElementById('wallet-total-balance');
+          if (totalBalEl) {
+            totalBalEl.innerHTML = '<span style="font-size: 18px; color: var(--error);">Error loading balance</span>';
+          }
         }
       }
 
@@ -901,24 +1405,38 @@
       (function bindUnifiedCTA(){
         const cta = document.getElementById('btn-encrypt-cta');
         if (!cta) return;
+
+        // Track if operation is in progress
+        let operationInProgress = false;
+
         cta.onclick = async () => {
+          // Prevent multiple clicks during operation
+          if (operationInProgress) {
+            showToast('Operation in progress, please wait...', 'error');
+            return;
+          }
+
           const out = document.getElementById('mint-output');
-          const rawInput = document.getElementById('deposit-input')?.value.trim() || '0';
-          const sel = document.getElementById('balance-index-select');
-          const idxVal = sel ? sel.value : '';
-          const fromIndex = idxVal === '' ? '0' : idxVal;
+          if (!out) return;
           const encryptDot = document.getElementById('step-encrypt-dot');
+          const fromSel = document.getElementById('balance-index-select');
+          const fromIndex = fromSel ? fromSel.value : '0';
           const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
 
           if (isDecrypt) {
             // First check if this is the initial decrypt click
-            const cta = document.getElementById('btn-encrypt-cta');
             if (cta && cta.textContent === 'DECRYPT') {
               // Change button to WITHDRAW and return (don't execute yet)
               cta.textContent = 'WITHDRAW';
               out.textContent = 'Click WITHDRAW to complete the operation and convert encrypted balance to native ETH.';
               return;
             }
+
+            // Disable button and start operation
+            operationInProgress = true;
+            cta.disabled = true;
+            cta.style.opacity = '0.6';
+            cta.style.cursor = 'not-allowed';
 
             // Withdraw mode: call /api/decrypt then /api/withdraw-eth to convert encrypted balance to native ETH
             out.textContent = 'Submitting withdraw...';
@@ -927,6 +1445,7 @@
               encryptDot.classList.add('active');
             }
             try {
+              const rawInput = document.getElementById('deposit-input')?.value || '0';
               const dec = sanitizeDecimalInput(rawInput);
               const numWei = toWei(dec);
               if (!(numWei > 0n)) {
@@ -935,28 +1454,25 @@
                   encryptDot.classList.remove('active');
                   encryptDot.classList.add('error');
                 }
+                // Re-enable button
+                operationInProgress = false;
+                cta.disabled = false;
+                cta.style.opacity = '1';
+                cta.style.cursor = 'pointer';
                 return;
               }
-              // Check uint128 limit (2^128 - 1 wei ≈ 340 undecillion ETH - effectively unlimited for practical use)
-              // We keep this check for safety, but it's unlikely to ever be hit with real ETH amounts
-              const UINT128_MAX = 340282366920938463463374607431768211455n;
-              if (numWei > UINT128_MAX) {
-                const maxEth = formatDec(toDecimal(String(UINT128_MAX)));
-                out.textContent = `Error: Amount exceeds uint128 maximum. Maximum is ${maxEth} ETH per transaction`;
+              const privateBalEst = BigInt(window.__privateBalanceEstimate || '0');
+              if (numWei > privateBalEst) {
+                out.textContent = `Error: Insufficient encrypted balance. You have ${toDecimal(privateBalEst)} eETH, but trying to withdraw ${dec} eETH.`;
                 if (encryptDot) {
                   encryptDot.classList.remove('active');
                   encryptDot.classList.add('error');
                 }
-                return;
-              }
-              const acc = window.__accounts || [];
-              const idx = parseInt(fromIndex, 10);
-              if (!Number.isInteger(idx) || idx < 0 || idx >= acc.length) {
-                out.textContent = 'Error: Please select a valid transaction account index (dropdown)';
-                if (encryptDot) {
-                  encryptDot.classList.remove('active');
-                  encryptDot.classList.add('error');
-                }
+                // Re-enable button
+                operationInProgress = false;
+                cta.disabled = false;
+                cta.style.opacity = '1';
+                cta.style.cursor = 'pointer';
                 return;
               }
 
@@ -975,6 +1491,11 @@
                   encryptDot.classList.remove('active','done');
                   encryptDot.classList.add('error');
                 }
+                // Re-enable button
+                operationInProgress = false;
+                cta.disabled = false;
+                cta.style.opacity = '1';
+                cta.style.cursor = 'pointer';
                 return;
               }
 
@@ -988,7 +1509,7 @@
               });
 
               if (withdrawData.ok) {
-                out.textContent = `Withdraw succeeded!\\n\\nDecrypt tx: ${decryptData.tx}\\nWithdraw tx: ${withdrawData.tx}\\n\\nTotal amount: ${formatDec(dec)} ETH\\n\\nDecrypt output:\\n${decryptData.raw}\\n\\nWithdraw output:\\n${withdrawData.raw}`;
+                out.textContent = `Withdraw succeeded!\n\nDecrypt tx: ${decryptData.tx}\nWithdraw tx: ${withdrawData.tx}\n\nTotal amount: ${formatDec(dec)} ETH\n\nDecrypt output:\n${decryptData.raw}\n\nWithdraw output:\n${withdrawData.raw}`;
                 if (encryptDot) {
                   encryptDot.classList.remove('active','error');
                   encryptDot.classList.add('done');
@@ -998,13 +1519,28 @@
                 // Update private balance estimate
                 if (numWei > 0n) {
                   const currentBal = BigInt(window.__privateBalanceEstimate || '0');
-                  window.__privateBalanceEstimate = String(currentBal > numWei ? currentBal - numWei : 0n);
+                  window.__privateBalanceEstimate = String(currentBal - numWei);
                   writePrivateEstimate();
                 }
                 updateApproveAndBalance();
                 updateMaxDisabled();
+
+                // Clear input after successful withdraw
+                const depositInput = document.getElementById('deposit-input');
+                if (depositInput) {
+                  depositInput.value = '';
+                }
+                const mintRange = document.getElementById('mint-range');
+                if (mintRange) {
+                  mintRange.value = '0';
+                  mintRange.style.setProperty('--val', '0%');
+                }
+                const depositAmount = document.getElementById('deposit-amount');
+                if (depositAmount) {
+                  depositAmount.textContent = '0';
+                }
               } else {
-                out.textContent = `Decrypt succeeded but withdraw failed.\\n\\nDecrypt tx: ${decryptData.tx}\\nWithdraw error: ${withdrawData.error}\\n\\nNote: ${formatDec(dec)} ETH is now in your clear balance. You can withdraw it manually from the "Withdraw ETH" section below.`;
+                out.textContent = `Decrypt succeeded but withdraw failed.\n\nDecrypt tx: ${decryptData.tx}\nWithdraw error: ${withdrawData.error}\n\nNote: ${formatDec(dec)} ETH is now in your clear balance. You can withdraw it manually from the "Withdraw ETH" section below.`;
                 if (encryptDot) {
                   encryptDot.classList.remove('active','done');
                   encryptDot.classList.add('error');
@@ -1020,45 +1556,55 @@
               }
               // Reset button back to DECRYPT on error
               if (cta) cta.textContent = 'DECRYPT';
+            } finally {
+              // Always re-enable button when operation completes
+              operationInProgress = false;
+              cta.disabled = false;
+              cta.style.opacity = '1';
+              cta.style.cursor = 'pointer';
             }
           } else {
+            // Disable button and start operation
+            operationInProgress = true;
+            cta.disabled = true;
+            cta.style.opacity = '0.6';
+            cta.style.cursor = 'not-allowed';
+
             // Encrypt mode: call new combined /api/deposit-and-encrypt
-            out.textContent = 'Submitting encrypt...';
+            out.textContent = 'Submitting deposit and encrypt...';
             if (encryptDot) {
               encryptDot.classList.remove('done','error');
               encryptDot.classList.add('active');
             }
             try {
+              const rawInput = document.getElementById('deposit-input')?.value || '0';
               const dec = sanitizeDecimalInput(rawInput);
               const numWei = toWei(dec);
               if (!(numWei > 0n)) {
-                out.textContent = 'Error: Encrypt amount must be positive ETH';
+                out.textContent = 'Error: Deposit amount must be positive ETH';
                 if (encryptDot) {
                   encryptDot.classList.remove('active');
                   encryptDot.classList.add('error');
                 }
+                // Re-enable button
+                operationInProgress = false;
+                cta.disabled = false;
+                cta.style.opacity = '1';
+                cta.style.cursor = 'pointer';
                 return;
               }
-              // Check uint128 limit (2^128 - 1 wei ≈ 340 undecillion ETH - effectively unlimited for practical use)
-              // We keep this check for safety, but it's unlikely to ever be hit with real ETH amounts
-              const UINT128_MAX = 340282366920938463463374607431768211455n;
-              if (numWei > UINT128_MAX) {
-                const maxEth = formatDec(toDecimal(String(UINT128_MAX)));
-                out.textContent = `Error: Amount exceeds uint128 maximum. Maximum is ${maxEth} ETH per transaction`;
+              const walletBal = BigInt(window.__walletBalance || '0');
+              if (numWei > walletBal) {
+                out.textContent = `Error: Insufficient wallet balance. You have ${toDecimal(walletBal)} ETH, but trying to deposit ${dec} ETH.`;
                 if (encryptDot) {
                   encryptDot.classList.remove('active');
                   encryptDot.classList.add('error');
                 }
-                return;
-              }
-              const acc = window.__accounts || [];
-              const idx = parseInt(fromIndex, 10);
-              if (!Number.isInteger(idx) || idx < 0 || idx >= acc.length) {
-                out.textContent = 'Error: Please select a valid transaction account index (dropdown)';
-                if (encryptDot) {
-                  encryptDot.classList.remove('active');
-                  encryptDot.classList.add('error');
-                }
+                // Re-enable button
+                operationInProgress = false;
+                cta.disabled = false;
+                cta.style.opacity = '1';
+                cta.style.cursor = 'pointer';
                 return;
               }
               window.__pendingTransactionCount = (window.__pendingTransactionCount || 0) + 1;
@@ -1068,7 +1614,7 @@
                 body: JSON.stringify({ value: dec, fromIndex })
               });
               if (data.ok) {
-                out.textContent = `Encrypt succeeded, tx: ${data.tx}\\n\\nOutput:\\n${data.raw}`;
+                out.textContent = `Deposit and encrypt succeeded, tx: ${data.tx}\n\nOutput:\n${data.raw}`;
                 if (encryptDot) {
                   encryptDot.classList.remove('active','error');
                   encryptDot.classList.add('done');
@@ -1081,6 +1627,21 @@
                 }
                 updateApproveAndBalance();
                 updateMaxDisabled();
+
+                // Clear input after successful encrypt
+                const depositInput = document.getElementById('deposit-input');
+                if (depositInput) {
+                  depositInput.value = '';
+                }
+                const mintRange = document.getElementById('mint-range');
+                if (mintRange) {
+                  mintRange.value = '0';
+                  mintRange.style.setProperty('--val', '0%');
+                }
+                const depositAmount = document.getElementById('deposit-amount');
+                if (depositAmount) {
+                  depositAmount.textContent = '0';
+                }
               } else {
                 out.textContent = `Error: ${data.error}`;
                 if (encryptDot) {
@@ -1094,20 +1655,37 @@
                 encryptDot.classList.remove('active','done');
                 encryptDot.classList.add('error');
               }
+            } finally {
+              // Always re-enable button when operation completes
+              operationInProgress = false;
+              cta.disabled = false;
+              cta.style.opacity = '1';
+              cta.style.cursor = 'pointer';
             }
           }
         };
       })();
 
       document.getElementById('btn-transfer').onclick = async () => {
+        const btn = document.getElementById('btn-transfer');
         const out = document.getElementById('transfer-output');
-        const to = document.getElementById('transfer-to').value.trim();
-        const value = document.getElementById('transfer-value').value.trim();
-        const sel = document.getElementById('balance-index-select');
-        const idxVal = sel ? sel.value : '';
-        const fromIndex = idxVal === '' ? '0' : idxVal;
-        out.textContent = 'Submitting...';
+
+        // Disable button during operation
+        if (btn.disabled) {
+          showToast('Transfer in progress, please wait...', 'error');
+          return;
+        }
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+
         try {
+          const to = document.getElementById('transfer-to').value.trim();
+          const value = document.getElementById('transfer-value').value.trim();
+          const sel = document.getElementById('balance-index-select');
+          const idxVal = sel ? sel.value : '';
+          const fromIndex = idxVal === '' ? '0' : idxVal;
+          out.textContent = 'Submitting...';
           const encryptDot = document.getElementById('step-encrypt-dot');
           if (encryptDot) {
             encryptDot.classList.remove('done','error');
@@ -1164,6 +1742,16 @@
                 updateApproveAndBalance();
                 updateMaxDisabled();
               }
+
+              // Clear transfer inputs after successful transfer
+              const transferToInput = document.getElementById('transfer-to');
+              const transferValueInput = document.getElementById('transfer-value');
+              if (transferToInput) {
+                transferToInput.value = '';
+              }
+              if (transferValueInput) {
+                transferValueInput.value = '';
+              }
             } else {
               out.textContent = `Error: ${data.error}`;
               if (encryptDot) {
@@ -1178,17 +1766,33 @@
             encryptDot.classList.remove('active','done');
             encryptDot.classList.add('error');
           }
+        } finally {
+          // Re-enable button
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
         }
       };
 
       document.getElementById('btn-withdraw').onclick = async () => {
+        const btn = document.getElementById('btn-withdraw');
         const out = document.getElementById('withdraw-output');
-        const value = document.getElementById('withdraw-value').value.trim();
-        const sel = document.getElementById('balance-index-select');
-        const idxVal = sel ? sel.value : '';
-        const fromIndex = idxVal === '' ? '0' : idxVal;
-        out.textContent = 'Submitting...';
+
+        // Disable button during operation
+        if (btn.disabled) {
+          showToast('Withdrawal in progress, please wait...', 'error');
+          return;
+        }
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+
         try {
+          const value = document.getElementById('withdraw-value').value.trim();
+          const sel = document.getElementById('balance-index-select');
+          const idxVal = sel ? sel.value : '';
+          const fromIndex = idxVal === '' ? '0' : idxVal;
+          out.textContent = 'Submitting...';
           // Validate ETH amount
           const dec = sanitizeDecimalInput(value);
           const numWei = toWei(dec);
@@ -1229,6 +1833,11 @@
           }
         } catch (e) {
           out.textContent = 'Request failed';
+        } finally {
+          // Re-enable button
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
         }
       };
     </script>
