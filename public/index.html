@@ -56,6 +56,10 @@
             <option value="">Select Decrypt Account</option>
           </select>
           <button id="btn-balance" class="primary">Query Balance</button>
+          <button id="btn-refresh-balance" style="cursor:pointer">🔄 Refresh</button>
+        </div>
+        <div style="font-size:12px;color:#888;margin-top:8px">
+          Last updated: <span id="last-refresh-time">Never</span>
         </div>
         <pre id="balance-output"></pre>
       </section>
@@ -172,6 +176,57 @@
         }
       })();
 
+      // Blockchain event listener for balance changes
+      (async function initBlockchainEventListener() {
+        // Only setup event listener if browser supports it and network is available
+        if (typeof window.ethereum === 'undefined') {
+          console.log('No Web3 provider detected, event listeners disabled');
+          return;
+        }
+
+        try {
+          // Listen for new blocks - this triggers after transactions are mined
+          if (window.ethereum && window.ethereum.on) {
+            let blockCheckTimeout = null;
+
+            window.ethereum.on('chainChanged', () => {
+              console.log('Chain changed, clearing event listeners');
+              clearTimeout(blockCheckTimeout);
+            });
+
+            // Simple block polling fallback (works without direct event support)
+            let lastBlockNumber = null;
+            async function checkForNewBlocks() {
+              try {
+                // Only check if we have a pending transaction
+                if (!window.__pendingTransactionCount || window.__pendingTransactionCount === 0) {
+                  return;
+                }
+
+                const response = await fetch(`/api/address?network=${currentNetwork}`);
+                if (response.ok) {
+                  // If API responds, a transaction might have completed
+                  // Refresh balance to check
+                  await updateApproveAndBalance();
+                  window.__pendingTransactionCount = Math.max(0, (window.__pendingTransactionCount || 1) - 1);
+                }
+              } catch (e) {
+                // Silently ignore errors in background polling
+              }
+            }
+
+            // Check every 5 seconds when there are pending transactions
+            setInterval(() => {
+              if (window.__pendingTransactionCount && window.__pendingTransactionCount > 0) {
+                checkForNewBlocks();
+              }
+            }, 5000);
+          }
+        } catch (error) {
+          console.log('Event listener setup failed:', error.message);
+        }
+      })();
+
       // Theme Toggle
       (function initTheme() {
         const savedTheme = localStorage.getItem('theme') || 'light';
@@ -206,14 +261,27 @@
         }, 1000);
       });
 
-      // Periodic auto-refresh every 30 seconds
-      setInterval(() => {
-        if (currentNetwork) {
-          updateApproveAndBalance().catch(() => {
-            // Silently ignore errors during background refresh
-          });
-        }
-      }, 30000);
+      // Update last refresh timestamp
+      function updateLastRefreshTime() {
+        const el = document.getElementById('last-refresh-time');
+        if (!el) return;
+        const now = new Date();
+        window.__lastRefreshTime = now;
+        el.textContent = 'Just now';
+
+        // Update relative time every 10 seconds
+        clearInterval(window.__refreshTimeInterval);
+        window.__refreshTimeInterval = setInterval(() => {
+          if (!window.__lastRefreshTime) return;
+          const secondsAgo = Math.floor((Date.now() - window.__lastRefreshTime.getTime()) / 1000);
+          if (secondsAgo < 60) {
+            el.textContent = `${secondsAgo} seconds ago`;
+          } else {
+            const minutesAgo = Math.floor(secondsAgo / 60);
+            el.textContent = `${minutesAgo} minute${minutesAgo > 1 ? 's' : ''} ago`;
+          }
+        }, 10000);
+      }
 
       function showToast(msg, type = '') {
         const el = document.getElementById('toast');
@@ -392,6 +460,17 @@
         }
       };
 
+      // Manual refresh button handler
+      document.getElementById('btn-refresh-balance').onclick = async () => {
+        try {
+          await updateApproveAndBalance();
+          updateLastRefreshTime();
+          showToast('Balance refreshed', 'success');
+        } catch (e) {
+          showToast('Refresh failed', 'error');
+        }
+      };
+
       // Auto load accounts on page load
       (async function autoLoadAccounts() {
         try {
@@ -554,7 +633,7 @@
           if (ctaCaption) {
             const amountShown = document.getElementById('deposit-amount')?.textContent || '0';
             const unit = unitEl?.textContent || 'ETH';
-            ctaCaption.textContent = `Decrypt ${amountShown} e${unit} into ${unit}`;
+            ctaCaption.textContent = `Withdraw ${amountShown} e${unit} as ${unit}`;
           }
           // 切换为解密模式时显示估算的加密余额（本地估值）
           if (pillBalEl) {
@@ -572,7 +651,7 @@
             const zeroVal = 0;
             if (amountEl) amountEl.textContent = String(zeroVal);
             if (depositInput) depositInput.value = String(zeroVal);
-            if (ctaCaption) ctaCaption.textContent = `Decrypt ${String(zeroVal)} e${unit} into ${unit}`;
+            if (ctaCaption) ctaCaption.textContent = `Withdraw ${String(zeroVal)} e${unit} as ${unit}`;
             if (range) {
               range.value = '0';
               range.style.setProperty('--val', `0%`);
@@ -611,7 +690,7 @@
           if (ctaCaption && unitEl) {
             const unit = unitEl.textContent || 'RT';
             ctaCaption.textContent = isDecrypt
-              ? `Decrypt ${formatDec(shownDec)} e${unit} into ${unit}`
+              ? `Withdraw ${formatDec(shownDec)} e${unit} as ${unit}`
               : `Encrypt ${formatDec(shownDec)} ${unit} into e${unit}`;
           }
           if (range) {
@@ -640,7 +719,7 @@
           if (ctaCaption && unitEl) {
             const unit = unitEl.textContent || 'RT';
             ctaCaption.textContent = isDecrypt
-              ? `Decrypt ${formatDec(shownDec)} e${unit} into ${unit}`
+              ? `Withdraw ${formatDec(shownDec)} e${unit} as ${unit}`
               : `Encrypt ${formatDec(shownDec)} ${unit} into e${unit}`;
           }
         }
@@ -780,6 +859,8 @@
             }
             // 根据余额状态更新 MAX 按钮可用性
             updateMaxDisabled();
+            // Update last refresh timestamp
+            updateLastRefreshTime();
           } else {
             setDotState('step-approve-dot','error');
             setStepsError(data.error || 'Approve stage failed');
@@ -830,8 +911,17 @@
           const isDecrypt = document.getElementById('tab-decrypt')?.classList.contains('active');
 
           if (isDecrypt) {
-            // Decrypt mode: call /api/decrypt
-            out.textContent = 'Submitting decrypt...';
+            // First check if this is the initial decrypt click
+            const cta = document.getElementById('btn-encrypt-cta');
+            if (cta && cta.textContent === 'DECRYPT') {
+              // Change button to WITHDRAW and return (don't execute yet)
+              cta.textContent = 'WITHDRAW';
+              out.textContent = 'Click WITHDRAW to complete the operation and convert encrypted balance to native ETH.';
+              return;
+            }
+
+            // Withdraw mode: call /api/decrypt then /api/withdraw-eth to convert encrypted balance to native ETH
+            out.textContent = 'Submitting withdraw...';
             if (encryptDot) {
               encryptDot.classList.remove('done','error');
               encryptDot.classList.add('active');
@@ -840,7 +930,7 @@
               const dec = sanitizeDecimalInput(rawInput);
               const numWei = toWei(dec);
               if (!(numWei > 0n)) {
-                out.textContent = 'Error: Decrypt amount must be positive ETH';
+                out.textContent = 'Error: Withdraw amount must be positive ETH';
                 if (encryptDot) {
                   encryptDot.classList.remove('active');
                   encryptDot.classList.add('error');
@@ -869,17 +959,42 @@
                 }
                 return;
               }
-              const data = await callApi('/api/decrypt', {
+
+              // Step 1: Decrypt encrypted balance to clear balance
+              out.textContent = 'Step 1/2: Decrypting...';
+              window.__pendingTransactionCount = (window.__pendingTransactionCount || 0) + 1;
+              const decryptData = await callApi('/api/decrypt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ value: String(numWei), fromIndex })
               });
-              if (data.ok) {
-                out.textContent = `Decrypt succeeded, tx: ${data.tx}\\n\\nOutput:\\n${data.raw}`;
+
+              if (!decryptData.ok) {
+                out.textContent = `Error in decrypt step: ${decryptData.error}`;
+                if (encryptDot) {
+                  encryptDot.classList.remove('active','done');
+                  encryptDot.classList.add('error');
+                }
+                return;
+              }
+
+              // Step 2: Withdraw clear balance as native ETH
+              out.textContent = 'Step 2/2: Withdrawing ETH...';
+              window.__pendingTransactionCount = (window.__pendingTransactionCount || 0) + 1;
+              const withdrawData = await callApi('/api/withdraw-eth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: dec, fromIndex })
+              });
+
+              if (withdrawData.ok) {
+                out.textContent = `Withdraw succeeded!\\n\\nDecrypt tx: ${decryptData.tx}\\nWithdraw tx: ${withdrawData.tx}\\n\\nTotal amount: ${formatDec(dec)} ETH\\n\\nDecrypt output:\\n${decryptData.raw}\\n\\nWithdraw output:\\n${withdrawData.raw}`;
                 if (encryptDot) {
                   encryptDot.classList.remove('active','error');
                   encryptDot.classList.add('done');
                 }
+                // Reset button back to DECRYPT
+                if (cta) cta.textContent = 'DECRYPT';
                 // Update private balance estimate
                 if (numWei > 0n) {
                   const currentBal = BigInt(window.__privateBalanceEstimate || '0');
@@ -889,18 +1004,22 @@
                 updateApproveAndBalance();
                 updateMaxDisabled();
               } else {
-                out.textContent = `Error: ${data.error}`;
+                out.textContent = `Decrypt succeeded but withdraw failed.\\n\\nDecrypt tx: ${decryptData.tx}\\nWithdraw error: ${withdrawData.error}\\n\\nNote: ${formatDec(dec)} ETH is now in your clear balance. You can withdraw it manually from the "Withdraw ETH" section below.`;
                 if (encryptDot) {
                   encryptDot.classList.remove('active','done');
                   encryptDot.classList.add('error');
                 }
+                // Reset button back to DECRYPT even on error
+                if (cta) cta.textContent = 'DECRYPT';
               }
             } catch (e) {
-              out.textContent = 'Request failed';
+              out.textContent = 'Request failed: ' + e.message;
               if (encryptDot) {
                 encryptDot.classList.remove('active','done');
                 encryptDot.classList.add('error');
               }
+              // Reset button back to DECRYPT on error
+              if (cta) cta.textContent = 'DECRYPT';
             }
           } else {
             // Encrypt mode: call new combined /api/deposit-and-encrypt
@@ -942,6 +1061,7 @@
                 }
                 return;
               }
+              window.__pendingTransactionCount = (window.__pendingTransactionCount || 0) + 1;
               const data = await callApi('/api/deposit-and-encrypt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1021,6 +1141,7 @@
             out.textContent = 'Error: Please select a valid transaction account index (dropdown)';
             return;
           }
+          window.__pendingTransactionCount = (window.__pendingTransactionCount || 0) + 1;
           const data = await callApi('/api/transfer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
