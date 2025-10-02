@@ -42,6 +42,9 @@ const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
   const { pathname, query } = parsed;
 
+  // Get network from query parameter, default to localhost
+  const network = query.network || 'localhost';
+
   // CORS preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -54,7 +57,7 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/address" && req.method === "GET") {
     try {
-      const { stdout } = await run("npx hardhat redact:address --network localhost");
+      const { stdout } = await run(`npx hardhat redact:address --network ${network}`);
       const match = stdout.match(/RedactedToken address is\s+(0x[a-fA-F0-9]{40})/);
       return sendJSON(res, 200, { ok: true, address: match ? match[1] : null, raw: stdout });
     } catch (e) {
@@ -63,7 +66,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (pathname === "/api/accounts" && req.method === "GET") {
     try {
-      const { stdout } = await run("npx hardhat accounts --network localhost");
+      const { stdout } = await run(`npx hardhat accounts --network ${network}`);
       const lines = stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
       const addrs = lines.filter((l) => /^0x[a-fA-F0-9]{40}$/.test(l));
       return sendJSON(res, 200, { ok: true, accounts: addrs, raw: stdout });
@@ -76,14 +79,18 @@ const server = http.createServer(async (req, res) => {
     const addressFlag = query.address ? ` --address ${query.address}` : "";
     const fromIndexFlag = query.fromIndex ? ` --fromindex ${query.fromIndex}` : "";
     try {
-      const { stdout } = await run(`npx hardhat redact:get-balance --network localhost${addressFlag}${fromIndexFlag}`);
-      // 兼容大小写与可变空格
+      const { stdout } = await run(`npx hardhat redact:get-balance --network ${network}${addressFlag}${fromIndexFlag}`);
+      const walletMatch = stdout.match(/wallet eth balance:\s*(\d+)/i);
       const encMatch = stdout.match(/encrypted balance:\s+(0x[a-fA-F0-9]+)/i);
       const clearMatch = stdout.match(/clear balance\s*:\s*(\d+)/i);
+      // Try to extract decrypted balance from stdout if available
+      const decryptedMatch = stdout.match(/decrypted\s+(?:balance|value):\s*(\d+)/i);
       return sendJSON(res, 200, {
         ok: true,
+        wallet: walletMatch ? walletMatch[1] : null,
         encrypted: encMatch ? encMatch[1] : null,
-        clear: clearMatch ? Number(clearMatch[1]) : null,
+        clear: clearMatch ? clearMatch[1] : null,
+        decrypted: decryptedMatch ? decryptedMatch[1] : null,
         raw: stdout,
       });
     } catch (e) {
@@ -99,7 +106,7 @@ const server = http.createServer(async (req, res) => {
         const { to, value, fromIndex } = JSON.parse(body || "{}");
         if (!to || !value) return sendJSON(res, 400, { ok: false, error: "Missing to or value" });
         const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
-        const { stdout } = await run(`npx hardhat redact:mint --network localhost --to ${to} --value ${value}${fromIndexFlag}`);
+        const { stdout } = await run(`npx hardhat redact:mint --network ${network} --to ${to} --value ${value}${fromIndexFlag}`);
         const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
         return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
       } catch (e) {
@@ -109,7 +116,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 新增：明文铸币
+  // Clear minting
   if (pathname === "/api/mint-clear" && req.method === "POST") {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
@@ -118,7 +125,7 @@ const server = http.createServer(async (req, res) => {
         const { to, value, fromIndex } = JSON.parse(body || "{}");
         if (!to || !value) return sendJSON(res, 400, { ok: false, error: "Missing to or value" });
         const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
-        const { stdout } = await run(`npx hardhat redact:mint-clear --network localhost --to ${to} --value ${value}${fromIndexFlag}`);
+        const { stdout } = await run(`npx hardhat redact:mint-clear --network ${network} --to ${to} --value ${value}${fromIndexFlag}`);
         const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
         return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
       } catch (e) {
@@ -128,7 +135,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 新增：从明文余额加密到私密余额（调用者自身）
+  // Encrypt from clear balance
   if (pathname === "/api/encrypt" && req.method === "POST") {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
@@ -137,7 +144,7 @@ const server = http.createServer(async (req, res) => {
         const { value, fromIndex } = JSON.parse(body || "{}");
         if (!value) return sendJSON(res, 400, { ok: false, error: "Missing value" });
         const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
-        const { stdout } = await run(`npx hardhat redact:encrypt-from-clear --network localhost --value ${value}${fromIndexFlag}`);
+        const { stdout } = await run(`npx hardhat redact:encrypt-from-clear --network ${network} --value ${value}${fromIndexFlag}`);
         const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
         return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
       } catch (e) {
@@ -147,7 +154,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 新增：从私密余额解密到明文余额（调用者自身）
+  // Decrypt to clear balance
   if (pathname === "/api/decrypt" && req.method === "POST") {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
@@ -156,7 +163,7 @@ const server = http.createServer(async (req, res) => {
         const { value, fromIndex } = JSON.parse(body || "{}");
         if (!value) return sendJSON(res, 400, { ok: false, error: "Missing value" });
         const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
-        const { stdout } = await run(`npx hardhat redact:decrypt-to-clear --network localhost --value ${value}${fromIndexFlag}`);
+        const { stdout } = await run(`npx hardhat redact:decrypt-to-clear --network ${network} --value ${value}${fromIndexFlag}`);
         const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
         return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
       } catch (e) {
@@ -174,7 +181,64 @@ const server = http.createServer(async (req, res) => {
         const { to, value, fromIndex } = JSON.parse(body || "{}");
         if (!to || !value) return sendJSON(res, 400, { ok: false, error: "Missing to or value" });
         const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
-        const { stdout } = await run(`npx hardhat redact:transfer --network localhost --to ${to} --value ${value}${fromIndexFlag}`);
+        const { stdout } = await run(`npx hardhat redact:transfer --network ${network} --to ${to} --value ${value}${fromIndexFlag}`);
+        const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
+        return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
+      } catch (e) {
+        return sendJSON(res, 500, { ok: false, error: e.stderr || String(e.error || e) });
+      }
+    });
+    return;
+  }
+
+  // Deposit ETH
+  if (pathname === "/api/deposit-eth" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", async () => {
+      try {
+        const { value, fromIndex } = JSON.parse(body || "{}");
+        if (!value) return sendJSON(res, 400, { ok: false, error: "Missing value" });
+        const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
+        const { stdout } = await run(`npx hardhat redact:deposit-eth --network ${network} --value ${value}${fromIndexFlag}`);
+        const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
+        return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
+      } catch (e) {
+        return sendJSON(res, 500, { ok: false, error: e.stderr || String(e.error || e) });
+      }
+    });
+    return;
+  }
+
+  // Deposit and Encrypt (combined operation)
+  if (pathname === "/api/deposit-and-encrypt" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", async () => {
+      try {
+        const { value, fromIndex } = JSON.parse(body || "{}");
+        if (!value) return sendJSON(res, 400, { ok: false, error: "Missing value" });
+        const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
+        const { stdout } = await run(`npx hardhat redact:deposit-and-encrypt --network ${network} --value ${value}${fromIndexFlag}`);
+        const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
+        return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
+      } catch (e) {
+        return sendJSON(res, 500, { ok: false, error: e.stderr || String(e.error || e) });
+      }
+    });
+    return;
+  }
+
+  // Withdraw ETH
+  if (pathname === "/api/withdraw-eth" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", async () => {
+      try {
+        const { value, fromIndex } = JSON.parse(body || "{}");
+        if (!value) return sendJSON(res, 400, { ok: false, error: "Missing value" });
+        const fromIndexFlag = fromIndex !== undefined && fromIndex !== "" ? ` --fromindex ${fromIndex}` : "";
+        const { stdout } = await run(`npx hardhat redact:withdraw-eth --network ${network} --value ${value}${fromIndexFlag}`);
         const txMatch = stdout.match(/tx:(0x[a-fA-F0-9]+)/);
         return sendJSON(res, 200, { ok: true, tx: txMatch ? txMatch[1] : null, raw: stdout });
       } catch (e) {
